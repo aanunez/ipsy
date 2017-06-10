@@ -5,19 +5,26 @@ from collections import namedtuple
 from shutil import copyfile
 from os import path
 
-# TODO check max sizes up front
+# TODO Max patch size?
 # TODO Support RLE
-# TODO should to diffed files be the same size? (also below)
+# TODO Check that we don't accidently write EOF anywhere
 
 HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
 RECORD_SIZE_SIZE = 2
 EOF_INT = 4542278
 MIN_PATCH = 14
+MAX_UNPATCHED_SIZE = 2**24 # 16 MiB
 
 ips_record = namedtuple('ips_record', 'offset size data')
 
 def write_ips_file( fhpatch, records ):
+    '''
+    Writes out a list of :class:`ips_record` to a file
+
+    :param fhpatch: File handler of the new patch file
+    :param records: List of class:`ips_record`
+    '''
     fhpatch.write(b"PATCH")
     for r in records:
         fhpatch.write( (r.offset).to_bytes(RECORD_OFFSET_SIZE, byteorder='big') )
@@ -26,6 +33,12 @@ def write_ips_file( fhpatch, records ):
     fhpatch.write(b"EOF")
 
 def read_ips_file( fhpatch ):
+    '''
+    Read in an IPS file to a list of :class:`ips_record`
+
+    :param fhpatch: File handler for IPS patch
+    :returns: List of class:`ips_record`
+    '''
     records = []
     assert(fhpatch.read(HEADER_SIZE) == b"PATCH"), "IPS file missing header"
     try:
@@ -45,6 +58,15 @@ def read_ips_file( fhpatch ):
     return records
 
 def diff( fhsrc, fhdst ):
+    '''
+    Diff two files to generate a collection of IPS records.
+
+    :param fhsrc: File handler of orignal file
+    :param fhdst: File handler of the patched file
+    :returns: List of class:`ips_record`
+
+    Assumes: Both files are the same size.
+    '''
     ips = []
     patch_bytes = []
     size = 0
@@ -64,11 +86,23 @@ def diff( fhsrc, fhdst ):
     return ips
 
 def patch( fhdest, fhpatch ):
+    '''
+    Apply an IPS patch to a file. Destructive processes.
+
+    :param fhdest: File handler to-be-patched
+    :param fhpatch: File handler of the patch
+    :returns: Number of records applied by the patch
+
+    Assumes: Patch file is at least 14 bytes long.
+    '''
     ips = read_ips_file( fhpatch )
     for record in ips:
         fhdest.seek(record.offset)
         fhdest.write(record.data)
     return len(ips)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Script functions below
 
 def operation_type( string ):
     if string.lower() in ['patch','diff']:
@@ -91,7 +125,7 @@ def parse_args():
     parser.add_argument('operation', type=operation_type, help="'Patch' or 'Diff'")
     parser.add_argument('unpatched', help="The Orignal File")
     parser.add_argument('patch', help="The IPS file (in Patch mode) or the already patched file (in Diff mode)")
-    parser.add_argument('output', default='', nargs='?', help="Name of resulting patch or patched file")
+    parser.add_argument('output', default='', nargs='?', help="Optional name of resulting patch or patched file")
     return parser.parse_args()
 
 def main():
@@ -99,6 +133,7 @@ def main():
 
     if opts.operation == 'patch':
         assert(path.getsize(opts.patch) > MIN_PATCH), "Patch is too small to be valid"
+        assert(path.getsize(opts.unpatched) < MAX_UNPATCHED_SIZE), "IPS can only patch files under 2^24 bytes"
         copy = make_copy( opts.output, opts.unpatched )
         with open( copy, 'r+b') as fhdest:
             with open( opts.patch, 'rb') as fhpatch:
@@ -106,7 +141,7 @@ def main():
         print("Applied " + str(numb) + " records from patch.")
 
     if opts.operation == 'diff':
-        # TODO assert that two files are same size?
+        assert(path.getsize(opts.unpatched) == path.getsize(opts.patch)), "The two files are of differing size"
         patchfile = opts.output if opts.output else "patch.ips"
         with open( opts.unpatched, 'rb' ) as fhsrc:
             with open( opts.patch, 'rb' ) as fhdest:
