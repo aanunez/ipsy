@@ -9,6 +9,7 @@ from os import path
 
 # TODO Max patch size?
 # TODO Check that we don't accidently write EOF anywhere
+# TODO check for all zero (bad) records in read
 
 HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -73,20 +74,21 @@ def rle_compress( records ):
     rle = []
     for r in records:
         if (r.size < MIN_SIZE_TO_COMPRESS) or \
-            not any([len(list(g)) >= MIN_SIZE_TO_COMPRESS for g in groupby(r.data)]):
+            not any([len(list(g)) >= MIN_SIZE_TO_COMPRESS for _,g in groupby(r.data)]):
             rle.append( r )
             continue
         offset, run = 0, b''
         for d,g in groupby(r.data):
             size = len(list(g))
             if size >= MIN_SIZE_TO_COMPRESS:
-                rle.append( ips_record(r.offset+offset-len(run), len(run), 0, run) )
-                rle.append( ips_record(r.offset+offset, 0, size, d) )
+                if run:
+                    rle.append( ips_record(r.offset+offset-len(run), len(run), 0, run) )
+                rle.append( ips_record(r.offset+offset, 0, size, bytes([d])) )
                 run = b''
             else:
                 run = run + (bytes([d])*size)
             offset += size
-        if run != b'':
+        if run:
             rle.append( ips_record(r.offset+offset-len(run), len(run), 0, run) )
     return rle
 
@@ -100,7 +102,7 @@ def diff( fhsrc, fhdst ):
 
     Assumes: Both files are the same size.
     '''
-    ips, patch_bytes, size = [], [], 0
+    ips, patch_bytes, size = [], b'', 0
     for src_byte in iter(partial(fhsrc.read, 1), b''):
         dst_byte = fhdst.read(1)
         if src_byte == dst_byte:
@@ -111,7 +113,8 @@ def diff( fhsrc, fhdst ):
         else:
             patch_bytes += dst_byte
     s = len(patch_bytes)
-    ips.append( ips_record(fhdst.tell()-s, s, 0, patch_bytes[:]) )
+    if s != 0:
+        ips.append( ips_record(fhdst.tell()-s, s, 0, patch_bytes[:]) )
     return ips
 
 def patch( fhdest, fhpatch ):
@@ -180,7 +183,7 @@ def main():
                     records = rle_compress( records )
         with open ( patchfile, 'wb' ) as fhpatch:
             write_ips_file( fhpatch, records )
-        print("Done.")
+        print("Patch created " + str(path.getsize(patchfile))+ " bytes")
 
 if __name__ == "__main__":
     main()
