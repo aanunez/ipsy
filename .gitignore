@@ -1,6 +1,7 @@
 exclude/
 docs/_static/
 docs/_template/
+*.ips
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
