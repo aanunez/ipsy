@@ -11,5 +11,9 @@ setup(
 	license = 'GPLv3',
 	url = 'https://github.com/aanunez/ipsy',
 	packages = ['ipsy'],
-	scripts = ['ipsy/ipsy.py']
+    entry_points={
+        'console_scripts': [
+            'ipsy = ipsy.__main__:main'
+        ]
+    },
 )
