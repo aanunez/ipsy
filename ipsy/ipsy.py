@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser, ArgumentTypeError
-from collections import namedtuple
+from collections import namedtuple, deque
 from itertools import groupby
 from functools import partial
 from shutil import copyfile
 from os import path
 
 # TODO Max patch size?
-# TODO Check that we don't accidently write EOF anywhere
-# TODO check for all zero (bad) records in read
+# TODO Prevent accidently writing EOF anywhere
 # TODO Improve RLE algorithm
+# TODO change Exceptions to warnings
 
 HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -22,7 +22,10 @@ MIN_COMPRESS = 4 # Compressing a size 4 record only saves 1 byte
 
 ips_record = namedtuple('ips_record', 'offset size rle_size data')
 
-def write_ips_file( fhpatch, records ):
+class IpsyError(Exception):
+    pass
+
+def write_ips( fhpatch, records ):
     '''
     Writes out a list of :class:`ips_record` to a file
 
@@ -36,7 +39,7 @@ def write_ips_file( fhpatch, records ):
         fhpatch.write( r.data )
     fhpatch.write(b"EOF")
 
-def read_ips_file( fhpatch ):
+def read_ips( fhpatch ):
     '''
     Read in an IPS file to a list of :class:`ips_record`
 
@@ -47,26 +50,37 @@ def read_ips_file( fhpatch ):
     they are automatically inflated.
     '''
     records = []
-    assert(fhpatch.read(HEADER_SIZE) == b"PATCH"), "IPS file missing header"
-    try:
-        for offset in iter(partial(fhpatch.read, RECORD_OFFSET_SIZE), b'EOF'):
-            rle_size = 0
-            if offset == b'':
-                raise RuntimeError
-            offset = int.from_bytes(offset, byteorder='big' )
-            size = int.from_bytes( fhpatch.read(RECORD_SIZE_SIZE), byteorder='big' )
-            if size == 0:
-                rle_size = fhpatch.read(RECORD_SIZE_SIZE)
-                rle_size = int.from_bytes( rle_size, byteorder='big' )
-                data = fhpatch.read(RLE_DATA_SIZE)
-                data *= size
-            else:
-                data = fhpatch.read(size)
-            records.append( ips_record(offset, size, rle_size, data) )
-    except:
-        raise RuntimeError("IPS file unexpectedly ended")
-    if fhpatch.read(1):
-        raise RuntimeError("Data after EOF in IPS file")
+    if fhpatch.read(HEADER_SIZE) != b"PATCH":
+        raise IpsyError(
+            "IPS file missing header")
+    for offset in iter(partial(fhpatch.read, RECORD_OFFSET_SIZE), b'EOF'):
+        rle_size = 0
+        size = fhpatch.read(RECORD_SIZE_SIZE)
+        if (offset == b'') or (size == b''):
+            raise IpsyError(
+                "IPS file unexpectedly ended")
+        offset = int.from_bytes( offset, byteorder='big' )
+        size = int.from_bytes( size, byteorder='big' )
+        if size == 0:
+            rle_size = fhpatch.read(RECORD_SIZE_SIZE)
+            rle_size = int.from_bytes( rle_size, byteorder='big' )
+            if rle_size == 0:
+                raise IpsyError(
+                    "IPS file has record with both 0 size and 0 RLE size")
+            data = fhpatch.read(RLE_DATA_SIZE)
+            if data == b'':
+                raise IpsyError(
+                    "IPS file unexpectedly ended")
+            data *= size
+        else:
+            data = fhpatch.read(size)
+            if len(data) != size:
+                raise IpsyError(
+                    "IPS file unexpectedly ended")
+        records.append( ips_record(offset, size, rle_size, data) )
+    if fhpatch.read(1) != b'':
+        raise IpsyError(
+            "Data after EOF in IPS file")
     return records
 
 def rle_compress( records ):
@@ -87,9 +101,9 @@ def rle_compress( records ):
             size = len(list(g))
             if size >= MIN_COMPRESS:
                 if run:
-                    o = r.offset+offset-len(run)
-                    rle.append( ips_record( o, len(run), 0, run) )
-                rle.append( ips_record(r.offset+offset, 0, size, bytes([d])) )
+                    o = r.offset+offset
+                    rle.append( ips_record( o-len(run), len(run), 0, run) )
+                rle.append( ips_record( o, 0, size, bytes([d])) )
                 run = b''
             else:
                 run = run + (bytes([d])*size)
@@ -97,6 +111,20 @@ def rle_compress( records ):
         if run:
             rle.append( ips_record(r.offset+offset-len(run), len(run), 0, run) )
     return rle
+
+def eof_check( fhpatch ):
+    '''
+    Reviews an IPS patch to insure it has only one EOF marker.
+
+    :param fhpatch: File handler of IPS patch
+    :returns: True if exactly one marker, else False
+    '''
+    check, counter = deque(maxlen=3), 0
+    for val in iter(partial(fhpatch.read, 1), b''):
+        check.append(val)
+        if check == b'EOF':
+            counter += 1
+    return counter == 1
 
 def diff( fhsrc, fhdst ):
     '''
@@ -133,7 +161,7 @@ def patch( fhdest, fhpatch ):
 
     Assumes: Patch file is at least 14 bytes long.
     '''
-    ips = read_ips_file( fhpatch )
+    ips = read_ips( fhpatch )
     for record in ips:
         fhdest.seek(record.offset)
         fhdest.write(record.data)
@@ -145,7 +173,8 @@ def patch( fhdest, fhpatch ):
 def operation_type( string ):
     if string.lower() in ['patch','diff']:
         return string.lower()
-    raise ArgumentTypeError(string + "is not a valid option")
+    raise ArgumentTypeError(
+        string + "is not a valid option")
 
 def make_copy( filename, unpatched ):
     dot = unpatched.rfind('.',unpatched.find('/'))
@@ -197,8 +226,12 @@ def main():
                 if opts.rle:
                     records = rle_compress( records )
         with open ( patchfile, 'wb' ) as fhpatch:
-            write_ips_file( fhpatch, records )
-        print("Patch created " + str(path.getsize(patchfile))+ " bytes")
+            write_ips( fhpatch, records )
+        if eof_check( patchfile ):
+            print("Patch created " + str(path.getsize(patchfile))+ " bytes")
+        else:
+            print("Multiple EOFs found in resulting patch.\n" + \
+                "This will need to be addressed by the developer.")
 
 if __name__ == "__main__":
     main()
