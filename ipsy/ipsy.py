@@ -3,11 +3,11 @@
 from collections import namedtuple, deque
 from itertools import groupby
 from functools import partial
+from warnings import warn
 
 # TODO Max patch size?
-# TODO Prevent accidently writing EOF anywhere
+# TODO Prevent accidently writing EOF anywhere (warning in place)
 # TODO Improve RLE algorithm
-# TODO change Exceptions to warnings
 
 HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -17,9 +17,20 @@ MIN_PATCH = 14
 MAX_UNPATCHED_SIZE = 2**24 # 16 MiB
 MIN_COMPRESS = 4 # Compressing a size 4 record only saves 1 byte
 
-ips_record = namedtuple('ips_record', 'offset size rle_size data')
+class ips_record( namedtuple('ips_record', 'offset size rle_size data') ):
+    '''
+    Data container for one record of an IPS file.
+
+    :param offset: offset in first 3 bytes of the record, stored as int
+    :param size: size in the next 2 bytes, stored as int
+    :param rle_size: size in the next 2 bytes if previous was 0, stored as int
+    :param data: bytes object of data with length size or rle_size
+    '''
 
 class IpsyError(Exception):
+    '''
+    Logged by :func:`read_ips` when IPS corruption is found.
+    '''
     pass
 
 def write_ips( fhpatch, records ):
@@ -62,8 +73,9 @@ def read_ips( fhpatch ):
             rle_size = fhpatch.read(RECORD_SIZE_SIZE)
             rle_size = int.from_bytes( rle_size, byteorder='big' )
             if rle_size == 0:
-                raise IpsyError(
-                    "IPS file has record with both 0 size and 0 RLE size")
+                warn("IPS file has record with both 0 size and 0 RLE size." + \
+                    "Continuing to next record.")
+                continue
             data = fhpatch.read(RLE_DATA_SIZE)
             if data == b'':
                 raise IpsyError(
@@ -76,8 +88,7 @@ def read_ips( fhpatch ):
                     "IPS file unexpectedly ended")
         records.append( ips_record(offset, size, rle_size, data) )
     if fhpatch.read(1) != b'':
-        raise IpsyError(
-            "Data after EOF in IPS file")
+        warn("Data after EOF in IPS file. Truncating.")
     return records
 
 def rle_compress( records ):
@@ -99,7 +110,7 @@ def rle_compress( records ):
             if size >= MIN_COMPRESS:
                 if run:
                     o = r.offset+offset
-                    rle.append( ips_record( o-len(run), len(run), 0, run) )
+                    rle.append( ips_record(o-len(run), len(run), 0, run) )
                 rle.append( ips_record( o, 0, size, bytes([d])) )
                 run = b''
             else:

@@ -8,6 +8,11 @@ Ipsy is a tool for applying IPS (International/Internal Patch System) files. The
 Using ipsy
 ==========
 
+Install as you would any other python program. You should only install this using sudo if you have reviewed the source.
+::
+
+    pip3 install --user .
+
 If you have to files 'game.rom' and 'patch_for_game.ips' you can patch the game by...
 ::
 
