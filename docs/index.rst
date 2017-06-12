@@ -1,7 +1,7 @@
 Ipsy's documentation
 ================================
 
-Ipsy is a tool for applying IPS (International/Internal Patch System) files. They are typically used for distributing emulator ROM changes as distributing the patched ROM would violate copyright law. IPS has a rather strait forward format expalined on the IPS File Format page.
+Ipsy is a tool for applying IPS (International/Internal Patch System) files. They are typically used for distributing emulator ROM changes as distributing the patched ROM would violate copyright law. IPS has a rather strait forward format expalined below.
 
 |
 
@@ -13,13 +13,15 @@ If you have to files 'game.rom' and 'patch_for_game.ips' you can patch the game 
 
     ./ipsy.py patch ./game.rom ./patch_for_game.ips
 
-This will generate a file named 'game_patched.rom'
+This will generate a file named 'game_patched.rom'.
+
 If you want to generate a patch use...
 ::
 
     ./ipsy.py diff ./game.rom ./edited_game.ips
 
 This will generate a file named 'patch.ips'
+
 When diffing you can also enable Run Length Encoding (RLE)
 ::
 
