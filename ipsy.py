@@ -10,6 +10,7 @@ from os import path
 # TODO Max patch size?
 # TODO Check that we don't accidently write EOF anywhere
 # TODO check for all zero (bad) records in read
+# TODO Improve RLE algorithm
 
 HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -17,7 +18,7 @@ RECORD_SIZE_SIZE = 2
 RLE_DATA_SIZE = 1
 MIN_PATCH = 14
 MAX_UNPATCHED_SIZE = 2**24 # 16 MiB
-MIN_SIZE_TO_COMPRESS = 4 # Compressing a size 4 record only saves 1 byte
+MIN_COMPRESS = 4 # Compressing a size 4 record only saves 1 byte
 
 ips_record = namedtuple('ips_record', 'offset size rle_size data')
 
@@ -41,6 +42,9 @@ def read_ips_file( fhpatch ):
 
     :param fhpatch: File handler for IPS patch
     :returns: List of :class:`ips_record`
+
+    If the file contains any RLE compressed records,
+    they are automatically inflated.
     '''
     records = []
     assert(fhpatch.read(HEADER_SIZE) == b"PATCH"), "IPS file missing header"
@@ -52,7 +56,8 @@ def read_ips_file( fhpatch ):
             offset = int.from_bytes(offset, byteorder='big' )
             size = int.from_bytes( fhpatch.read(RECORD_SIZE_SIZE), byteorder='big' )
             if size == 0:
-                rle_size = int.from_bytes( fhpatch.read(RECORD_SIZE_SIZE), byteorder='big' )
+                rle_size = fhpatch.read(RECORD_SIZE_SIZE)
+                rle_size = int.from_bytes( rle_size, byteorder='big' )
                 data = fhpatch.read(RLE_DATA_SIZE)
                 data *= size
             else:
@@ -73,16 +78,17 @@ def rle_compress( records ):
     '''
     rle = []
     for r in records:
-        if (r.size < MIN_SIZE_TO_COMPRESS) or \
-            not any([len(list(g)) >= MIN_SIZE_TO_COMPRESS for _,g in groupby(r.data)]):
+        if (r.size < MIN_COMPRESS) or \
+        not any([len(list(g)) >= MIN_COMPRESS for _,g in groupby(r.data)]):
             rle.append( r )
             continue
         offset, run = 0, b''
         for d,g in groupby(r.data):
             size = len(list(g))
-            if size >= MIN_SIZE_TO_COMPRESS:
+            if size >= MIN_COMPRESS:
                 if run:
-                    rle.append( ips_record(r.offset+offset-len(run), len(run), 0, run) )
+                    o = r.offset+offset-len(run)
+                    rle.append( ips_record( o, len(run), 0, run) )
                 rle.append( ips_record(r.offset+offset, 0, size, bytes([d])) )
                 run = b''
             else:
@@ -153,20 +159,28 @@ def make_copy( filename, unpatched ):
     return filename
 
 def parse_args():
-    parser = ArgumentParser(description="Apply an IPS patch or Diff two files to generate a patch.")
-    parser.add_argument('operation', type=operation_type, help="'Patch' or 'Diff'")
-    parser.add_argument('unpatched', help="The Orignal File")
-    parser.add_argument('patch', help="The IPS file (in Patch mode) or the already patched file (in Diff mode)")
-    parser.add_argument('output', default='', nargs='?', help="Optional name of resulting patch or patched file")
-    parser.add_argument('-rle', help='Attempt to compress the IPS patch when performing a diff. Ignored when patching.', action='store_true')
+    parser = ArgumentParser(description=
+        "Apply an IPS patch or Diff two files to generate a patch.")
+    parser.add_argument('operation', type=operation_type, help=
+        "'Patch' or 'Diff'")
+    parser.add_argument('unpatched', help=
+        "The Orignal File")
+    parser.add_argument('patch', help=
+        "The IPS file (in Patch mode) or the already patched file (in Diff mode)")
+    parser.add_argument('output', default='', nargs='?', help=
+        "Optional name of resulting patch or patched file")
+    parser.add_argument('-rle', action='store_true', help=
+        "Attempt to compress the IPS patch when performing a diff. Ignored when patching.")
     return parser.parse_args()
 
 def main():
     opts = parse_args()
 
     if opts.operation == 'patch':
-        assert(path.getsize(opts.patch) > MIN_PATCH), "Patch is too small to be valid"
-        assert(path.getsize(opts.unpatched) < MAX_UNPATCHED_SIZE), "IPS can only patch files under 2^24 bytes"
+        assert(path.getsize(opts.patch) > MIN_PATCH), \
+            "Patch is too small to be valid"
+        assert(path.getsize(opts.unpatched) < MAX_UNPATCHED_SIZE), \
+            "IPS can only patch files under 2^24 bytes"
         copy = make_copy( opts.output, opts.unpatched )
         with open( copy, 'r+b') as fhdest:
             with open( opts.patch, 'rb') as fhpatch:
@@ -174,7 +188,8 @@ def main():
         print("Applied " + str(numb) + " records from patch.")
 
     if opts.operation == 'diff':
-        assert(path.getsize(opts.unpatched) == path.getsize(opts.patch)), "The two files are of differing size"
+        assert(path.getsize(opts.unpatched) == path.getsize(opts.patch)), \
+            "The two files are of differing size"
         patchfile = opts.output if opts.output else "patch.ips"
         with open( opts.unpatched, 'rb' ) as fhsrc:
             with open( opts.patch, 'rb' ) as fhdest:

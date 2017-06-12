@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # ipsy documentation build configuration file, created by
-# sphinx-quickstart on Sat Jun 10 13:19:21 2017.
+# sphinx-quickstart on Sun Jun 11 19:46:52 2017.
 #
 # This file is execfile()d with the current directory set to its
 # containing dir.
@@ -33,11 +33,10 @@ sys.path.insert(0, os.path.abspath('..'))
 # ones.
 extensions = ['sphinx.ext.autodoc',
     'sphinx.ext.todo',
-    'sphinx.ext.viewcode',
-    'sphinx.ext.githubpages']
+    'sphinx.ext.viewcode']
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+#templates_path = ['_templates']
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
@@ -92,12 +91,12 @@ html_theme = 'classic'
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-# html_theme_options = {}
+html_theme_options = {'stickysidebar': "true"}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+#html_static_path = ['_static']
 
 
 # -- Options for HTMLHelp output ------------------------------------------
