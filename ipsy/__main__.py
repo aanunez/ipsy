@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser, ArgumentTypeError
 from shutil import copyfile
-from sys import argv, path
+from sys import argv
 from os import path, sep
 from ipsy import *
 
@@ -73,11 +73,8 @@ def main(args=None):
         patchfile = name_patch( opts.output, opts.unpatched )
         with open( opts.unpatched, 'rb' ) as fhsrc:
             with open( opts.patch, 'rb' ) as fhdest:
-                records = diff( fhsrc, fhdest )
-                if opts.rle:
-                    records = rle_compress( records )
-        with open ( patchfile, 'wb' ) as fhpatch:
-            write_ips( fhpatch, records )
+                with open ( patchfile, 'wb' ) as fhpatch:
+                    diff( fhsrc, fhdest )
         print("Patch created " + str(path.getsize(patchfile))+ " bytes")
 
 if __name__ == "__main__":

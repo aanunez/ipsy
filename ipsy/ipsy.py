@@ -54,8 +54,8 @@ def read_ips( fhpatch, EOFcontinue=False ):
     Read in an IPS file to a list of :class:`ips_record`
 
     :param fhpatch: File handler for IPS patch
-    :param EOFcontinue: Continue processing until real (last 3 bytes of file)
-                        EOF is found
+    :param EOFcontinue: Continue processing until the real EOF
+                        is found (last 3 bytes of file)
     :returns: List of :class:`ips_record`
 
     If the file contains any RLE compressed records,
@@ -145,12 +145,14 @@ def eof_check( fhpatch ):
             counter += 1
     return (counter == 1)
 
-def diff( fhsrc, fhdst, rle ):
+def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
     '''
-    Diff two files to generate a collection of IPS records.
+    Diff two files, attempt RLE compression, and write the IPS patch to a file.
 
     :param fhsrc: File handler of orignal file
     :param fhdst: File handler of the patched file
+    :param fhpatch: File handler for IPS file
+    :param rle: True if RLE compression should be used
     :returns: List of :class:`ips_record`
 
     Assumes: Both files are the same size.
@@ -175,21 +177,36 @@ def diff( fhsrc, fhdst, rle ):
         ips.append( ips_record(fhdst.tell()-s, s, 0, patch_bytes[:]) )
     if len(ips) == 0:
         warn("No differances found in files")
+    elif rle:
+        records = rle_compress( records )
+    if fhpatch:
+        write_ips( fhpatch, records )
     return ips
 
-def patch( fhdest, fhpatch ):
+def patch_from_records( fhdest, records ):
+    '''
+    Apply an list of :class:`ips_record` a file. Destructive processes.
+
+    :param fhdest: File handler to-be-patched
+    :param fhpatch: File handler of the patch
+
+    :returns: Number of records applied by the patch
+    '''
+    for r in records:
+        fhdest.seek(r.offset)
+        fhdest.write(r.data)
+    return len(ips)
+
+def patch( fhdest, fhpatch, EOFcontinue=False ):
     '''
     Apply an IPS patch to a file. Destructive processes.
 
     :param fhdest: File handler to-be-patched
     :param fhpatch: File handler of the patch
+    :param EOFcontinue: Continue processing until the real EOF
+                        is found (last 3 bytes of file)
     :returns: Number of records applied by the patch
-
-    Assumes: Patch file is at least 14 bytes long.
     '''
-    ips = read_ips( fhpatch )
-    for record in ips:
-        fhdest.seek(record.offset)
-        fhdest.write(record.data)
-    return len(ips)
+    ips = read_ips( fhpatch, EOFcontinue )
+    return patch_from_records( fhdest, records)
 
