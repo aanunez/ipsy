@@ -26,6 +26,7 @@ class ips_record( namedtuple('ips_record', 'offset size rle_size data') ):
     :param rle_size: size in the next 2 bytes if previous was 0, stored as int
     :param data: bytes object of data with length size or rle_size
     '''
+    pass
 
 class IpsyError(Exception):
     '''
@@ -127,12 +128,12 @@ def eof_check( fhpatch ):
     :param fhpatch: File handler of IPS patch
     :returns: True if exactly one marker, else False
     '''
-    check, counter = deque(maxlen=3), 0
+    check, counter, i = deque(maxlen=3), 0, 0
     for val in iter(partial(fhpatch.read, 1), b''):
         check.append(val)
-        if check == b'EOF':
+        if b''.join(check) == b'EOF':
             counter += 1
-    return counter == 1
+    return (counter == 1)
 
 def diff( fhsrc, fhdst ):
     '''
@@ -157,6 +158,8 @@ def diff( fhsrc, fhdst ):
     s = len(patch_bytes)
     if s != 0:
         ips.append( ips_record(fhdst.tell()-s, s, 0, patch_bytes[:]) )
+    if len(ips) == 0:
+        warn("No differances found in files")
     return ips
 
 def patch( fhdest, fhpatch ):

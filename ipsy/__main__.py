@@ -2,8 +2,9 @@
 
 from argparse import ArgumentParser, ArgumentTypeError
 from shutil import copyfile
-from sys import argv
-from os import path
+from sys import argv, path
+from os import path, sep
+from ipsy import *
 
 def operation_type( string ):
     if string.lower() in ['patch','diff']:
@@ -12,15 +13,25 @@ def operation_type( string ):
         string + "is not a valid option")
 
 def make_copy( filename, unpatched ):
-    dot = unpatched.rfind('.',unpatched.find('/'))
+    fname = unpatched.split(sep)[-1]
+    dot = fname.rfind('.')
     if filename:
         pass
     elif dot == -1:
         filename = unpatched + "_patched"
     else:
-        filename = unpatched[:dot] + "_patched" + unpatched[dot:]
+        filename = fname[:dot] + "_patched" + fname[dot:]
     copyfile(unpatched, filename)
     return filename
+
+def name_patch( patchname, unpatched ):
+    if patchname:
+        return patchname
+    fname = unpatched.split(sep)[-1]
+    if fname.rfind('.') == -1:
+        patchname = "patch_" + fname + ".ips"
+    else:
+        patchname = "patch_" + fname.split('.')[:-1] + ".ips"
 
 def parse_args():
     parser = ArgumentParser(description=
@@ -43,10 +54,10 @@ def main(args=None):
     opts = parse_args()
 
     if opts.operation == 'patch':
-        assert(path.getsize(opts.patch) > MIN_PATCH), \
-            "Patch is too small to be valid"
-        assert(path.getsize(opts.unpatched) < MAX_UNPATCHED_SIZE), \
-            "IPS can only patch files under 2^24 bytes"
+        if path.getsize(opts.patch) > MIN_PATCH):
+            raise IOError("Patch is too small to be valid")
+        if path.getsize(opts.unpatched) < MAX_UNPATCHED_SIZE:
+            raise IOError("IPS can only patch files under 2^24 bytes")
         copy = make_copy( opts.output, opts.unpatched )
         with open( copy, 'r+b') as fhdest:
             with open( opts.patch, 'rb') as fhpatch:
@@ -54,9 +65,9 @@ def main(args=None):
         print("Applied " + str(numb) + " records from patch.")
 
     if opts.operation == 'diff':
-        assert(path.getsize(opts.unpatched) == path.getsize(opts.patch)), \
-            "The two files are of differing size"
-        patchfile = opts.output if opts.output else "patch.ips"
+        if path.getsize(opts.unpatched) == path.getsize(opts.patch)
+            raise IOError("The two files are of differing size")
+        patchfile = name_patch( opts.output, opts.unpatched )
         with open( opts.unpatched, 'rb' ) as fhsrc:
             with open( opts.patch, 'rb' ) as fhdest:
                 records = diff( fhsrc, fhdest )
@@ -64,11 +75,12 @@ def main(args=None):
                     records = rle_compress( records )
         with open ( patchfile, 'wb' ) as fhpatch:
             write_ips( fhpatch, records )
-        if eof_check( patchfile ):
-            print("Patch created " + str(path.getsize(patchfile))+ " bytes")
-        else:
-            print("Multiple EOFs found in resulting patch.\n" + \
-                "This will need to be addressed by the developer.")
+        with open ( patchfile, 'rb' ) as fhpatch:
+            if eof_check( fhpatch ):
+                print("Patch created " + str(path.getsize(patchfile))+ " bytes")
+            else:
+                print("Multiple EOFs found in resulting patch.\n" + \
+                    "This will need to be addressed by the developer.")
 
 if __name__ == "__main__":
     main()
