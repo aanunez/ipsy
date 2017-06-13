@@ -56,7 +56,7 @@ def main(args=None):
     if opts.operation == 'patch':
         if path.getsize(opts.patch) > MIN_PATCH):
             raise IOError("Patch is too small to be valid")
-        if path.getsize(opts.unpatched) < MAX_UNPATCHED_SIZE:
+        if path.getsize(opts.unpatched) < MAX_UNPATCHED:
             raise IOError("IPS can only patch files under 2^24 bytes")
         copy = make_copy( opts.output, opts.unpatched )
         with open( copy, 'r+b') as fhdest:
@@ -75,12 +75,7 @@ def main(args=None):
                     records = rle_compress( records )
         with open ( patchfile, 'wb' ) as fhpatch:
             write_ips( fhpatch, records )
-        with open ( patchfile, 'rb' ) as fhpatch:
-            if eof_check( fhpatch ):
-                print("Patch created " + str(path.getsize(patchfile))+ " bytes")
-            else:
-                print("Multiple EOFs found in resulting patch.\n" + \
-                    "This will need to be addressed by the developer.")
+        print("Patch created " + str(path.getsize(patchfile))+ " bytes")
 
 if __name__ == "__main__":
     main()

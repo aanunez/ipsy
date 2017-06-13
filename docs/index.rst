@@ -64,7 +64,7 @@ Ipsy API
 IPS File Format
 ===============
 
-IPS files consist of a header, a list of records, and a footer. All IPS files are big-endian. Due to fixed length of the offset value, IPS files can't be used to patch a target larger that 2^24-1 bytes (16 MB). The minimum viable IPS file (1 record changing 1 byte of data) is 14 bytes in size.
+IPS files consist of a header, a list of records, and a footer. All IPS files are big-endian. Due to fixed length of the offset value, IPS files can't be used to patch a target larger that 2^24-1 bytes (16 MB). The minimum viable IPS file (1 record changing 1 byte of data) is 14 bytes in size. There are a handfull of concerns with the format. A literal 'EOF' marker is used that is intended to be found instead of an offset value, however if the offset value is RAM address 0x454f46 then we have a problem. Ipsy, and most differs, resolves this by checking the offset and, if needed, decriments it while increamenting the size of the record and pre-appending the previous byte's value to data.
 
 +------------+---------------+----------------------------------------------------------------+
 | Section    | Size in Bytes | Description                                                    |

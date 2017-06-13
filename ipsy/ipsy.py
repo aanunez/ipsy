@@ -5,17 +5,17 @@ from itertools import groupby
 from functools import partial
 from warnings import warn
 
-# TODO Max patch size?
-# TODO Prevent accidently writing EOF anywhere (warning in place)
-# TODO Improve RLE algorithm
+# TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
+# TODO add option to continue on 'EOF' offset
 
-HEADER_SIZE = 5
+RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
 RECORD_SIZE_SIZE = 2
-RLE_DATA_SIZE = 1
-MIN_PATCH = 14
-MAX_UNPATCHED_SIZE = 2**24 # 16 MiB
+RECORD_RLE_DATA_SIZE = 1
+MIN_PATCH = 14 # in bytes
+MAX_UNPATCHED = 2**24 # 16 MiB
 MIN_COMPRESS = 4 # Compressing a size 4 record only saves 1 byte
+MAX_RECORD_SIZE = 2**16-1 # Max value held in 2 bytes
 
 class ips_record( namedtuple('ips_record', 'offset size rle_size data') ):
     '''
@@ -59,7 +59,7 @@ def read_ips( fhpatch ):
     they are automatically inflated.
     '''
     records = []
-    if fhpatch.read(HEADER_SIZE) != b"PATCH":
+    if fhpatch.read(RECORD_HEADER_SIZE) != b"PATCH":
         raise IpsyError(
             "IPS file missing header")
     for offset in iter(partial(fhpatch.read, RECORD_OFFSET_SIZE), b'EOF'):
@@ -77,7 +77,7 @@ def read_ips( fhpatch ):
                 warn("IPS file has record with both 0 size and 0 RLE size." + \
                     "Continuing to next record.")
                 continue
-            data = fhpatch.read(RLE_DATA_SIZE)
+            data = fhpatch.read(RECORD_RLE_DATA_SIZE)
             if data == b'':
                 raise IpsyError(
                     "IPS file unexpectedly ended")
@@ -145,12 +145,17 @@ def diff( fhsrc, fhdst ):
 
     Assumes: Both files are the same size.
     '''
-    ips, patch_bytes, size = [], b'', 0
+    ips, patch_bytes  = [], b''
     for src_byte in iter(partial(fhsrc.read, 1), b''):
         dst_byte = fhdst.read(1)
-        if src_byte == dst_byte:
-            s = len(patch_bytes)
+        s = len(patch_bytes)
+        if (src_byte == dst_byte) or (s == MAX_RECORD_SIZE):
             if s != 0:
+                offset = fhdst.tell()-s-1
+                if offset.to_bytes(RECORD_OFFSET_SIZE, byteorder='big') == b'EOF':
+                    offset, s = offset-1, s+1
+                    fhsrc.seek(offset)
+                    patch_bytes = fhsrc.read(s)
                 ips.append( ips_record(fhdst.tell()-s-1, s, 0, patch_bytes[:]) )
             patch_bytes = b''
         else:
