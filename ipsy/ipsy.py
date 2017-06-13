@@ -4,15 +4,16 @@ from collections import namedtuple, deque
 from itertools import groupby
 from functools import partial
 from warnings import warn
+from os import SEEK_CUR
 
 # TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
-# TODO add option to continue on 'EOF' offset
 
 RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
 RECORD_SIZE_SIZE = 2
 RECORD_RLE_DATA_SIZE = 1
 MIN_PATCH = 14 # in bytes
+MIN_RECORD = 6 # Min size of a record
 MAX_UNPATCHED = 2**24 # 16 MiB
 MIN_COMPRESS = 4 # Compressing a size 4 record only saves 1 byte
 MAX_RECORD_SIZE = 2**16-1 # Max value held in 2 bytes
@@ -48,11 +49,13 @@ def write_ips( fhpatch, records ):
         fhpatch.write( r.data )
     fhpatch.write(b"EOF")
 
-def read_ips( fhpatch ):
+def read_ips( fhpatch, EOFcontinue=False ):
     '''
     Read in an IPS file to a list of :class:`ips_record`
 
     :param fhpatch: File handler for IPS patch
+    :param EOFcontinue: Continue processing until real (last 3 bytes of file)
+                        EOF is found
     :returns: List of :class:`ips_record`
 
     If the file contains any RLE compressed records,
@@ -62,10 +65,17 @@ def read_ips( fhpatch ):
     if fhpatch.read(RECORD_HEADER_SIZE) != b"PATCH":
         raise IpsyError(
             "IPS file missing header")
-    for offset in iter(partial(fhpatch.read, RECORD_OFFSET_SIZE), b'EOF'):
+    for offset in iter(partial(fhpatch.read, RECORD_OFFSET_SIZE), b''):
+        if offset == b'EOF':
+            if EOFcontinue:
+                if len(fhpatch.read(MIN_RECORD)) != MIN_RECORD:
+                    break
+                fhpatch.seek(-MIN_RECORD, SEEK_CUR)
+            else:
+                break
         rle_size = 0
         size = fhpatch.read(RECORD_SIZE_SIZE)
-        if (offset == b'') or (size == b''):
+        if (len(offset) != RECORD_OFFSET_SIZE) or (len(size) == RECORD_SIZE_SIZE):
             raise IpsyError(
                 "IPS file unexpectedly ended")
         offset = int.from_bytes( offset, byteorder='big' )
@@ -135,7 +145,7 @@ def eof_check( fhpatch ):
             counter += 1
     return (counter == 1)
 
-def diff( fhsrc, fhdst ):
+def diff( fhsrc, fhdst, rle ):
     '''
     Diff two files to generate a collection of IPS records.
 

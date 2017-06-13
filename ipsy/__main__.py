@@ -46,6 +46,9 @@ def parse_args():
         "Optional name of resulting patch or patched file")
     parser.add_argument('-rle', action='store_true', help=
         "Attempt to compress the IPS patch when performing a diff. Ignored when patching.")
+    parser.add_argument('-eof', action='store_true', help=
+        "Ignore 'EOF' markers unless they are actually found at the end of the file. Ignored when diffing.")
+
     return parser.parse_args()
 
 def main(args=None):
@@ -54,7 +57,7 @@ def main(args=None):
     opts = parse_args()
 
     if opts.operation == 'patch':
-        if path.getsize(opts.patch) > MIN_PATCH):
+        if path.getsize(opts.patch) > MIN_PATCH:
             raise IOError("Patch is too small to be valid")
         if path.getsize(opts.unpatched) < MAX_UNPATCHED:
             raise IOError("IPS can only patch files under 2^24 bytes")
@@ -65,7 +68,7 @@ def main(args=None):
         print("Applied " + str(numb) + " records from patch.")
 
     if opts.operation == 'diff':
-        if path.getsize(opts.unpatched) == path.getsize(opts.patch)
+        if path.getsize(opts.unpatched) == path.getsize(opts.patch):
             raise IOError("The two files are of differing size")
         patchfile = name_patch( opts.output, opts.unpatched )
         with open( opts.unpatched, 'rb' ) as fhsrc:
