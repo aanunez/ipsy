@@ -8,7 +8,13 @@ Ipsy is a tool for applying IPS (International/Internal Patch System) files. The
 Using ipsy
 ==========
 
-Install as you would any other python program. You should only install this using sudo if you have reviewed the source.
+You should only install this using sudo if you have reviewed the source. You can run Ipsy without installing by passing it into python with the '-m' flag.
+
+::
+
+    python -m ipsy [Ipsy Arguments]
+
+Install as you would any other python program.
 ::
 
     pip3 install --user .
@@ -16,26 +22,26 @@ Install as you would any other python program. You should only install this usin
 If you have to files 'game.rom' and 'patch_for_game.ips' you can patch the game by...
 ::
 
-    ./ipsy.py patch ./game.rom ./patch_for_game.ips
+    ipsy patch ./game.rom ./patch_for_game.ips
 
 This will generate a file named 'game_patched.rom'.
 
 If you want to generate a patch use...
 ::
 
-    ./ipsy.py diff ./game.rom ./edited_game.ips
+    ipsy diff ./game.rom ./edited_game.ips
 
 This will generate a file named 'patch.ips'
 
 When diffing you can also enable Run Length Encoding (RLE)
 ::
 
-    ./ipsy.py diff ./game.rom ./edited_game.ips -rle
+    ipsy diff ./game.rom ./edited_game.ips -rle
 
 RLE finds groups of edits where the same value is written is succession and replaces them with the value and the number of times that value should be written.
 ::
 
-    usage: ipsy.py [-h] [-rle] operation unpatched patch [output]
+    usage: ipsy [-h] [-rle] [-eof] operation unpatched patch [output]
 
     Apply an IPS patch or Diff two files to generate a patch.
 
@@ -50,6 +56,8 @@ RLE finds groups of edits where the same value is written is succession and repl
       -h, --help  show this help message and exit
       -rle        Attempt to compress the IPS patch when performing a diff.
                   Ignored when patching.
+      -eof        Ignore 'EOF' markers unless they are actually found at the end
+                  of the file. Ignored when diffing.
 
 |
 

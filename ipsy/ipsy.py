@@ -7,6 +7,7 @@ from warnings import warn
 from os import SEEK_CUR
 
 # TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
+# TODO add IPS merge feature
 
 RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -75,7 +76,7 @@ def read_ips( fhpatch, EOFcontinue=False ):
                 break
         rle_size = 0
         size = fhpatch.read(RECORD_SIZE_SIZE)
-        if (len(offset) != RECORD_OFFSET_SIZE) or (len(size) == RECORD_SIZE_SIZE):
+        if (len(offset) != RECORD_OFFSET_SIZE) or (len(size) != RECORD_SIZE_SIZE):
             raise IpsyError(
                 "IPS file unexpectedly ended")
         offset = int.from_bytes( offset, byteorder='big' )
@@ -153,7 +154,6 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
     :param fhdst: File handler of the patched file
     :param fhpatch: File handler for IPS file
     :param rle: True if RLE compression should be used
-    :returns: List of :class:`ips_record`
 
     Assumes: Both files are the same size.
     '''
@@ -195,7 +195,7 @@ def patch_from_records( fhdest, records ):
     for r in records:
         fhdest.seek(r.offset)
         fhdest.write(r.data)
-    return len(ips)
+    return len(records)
 
 def patch( fhdest, fhpatch, EOFcontinue=False ):
     '''
@@ -207,6 +207,6 @@ def patch( fhdest, fhpatch, EOFcontinue=False ):
                         is found (last 3 bytes of file)
     :returns: Number of records applied by the patch
     '''
-    ips = read_ips( fhpatch, EOFcontinue )
-    return patch_from_records( fhdest, records)
+    records = read_ips( fhpatch, EOFcontinue )
+    return patch_from_records( fhdest, records )
 

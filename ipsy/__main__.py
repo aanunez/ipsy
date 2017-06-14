@@ -4,7 +4,13 @@ from argparse import ArgumentParser, ArgumentTypeError
 from shutil import copyfile
 from sys import argv
 from os import path, sep
-from ipsy import *
+try:
+    from .ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff
+except SystemError: # Used if running without installing
+    import sys
+    import os
+    sys.path.append(os.path.abspath("ipsy"))
+    from ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff
 
 def operation_type( string ):
     if string.lower() in ['patch','diff']:
@@ -57,9 +63,9 @@ def main(args=None):
     opts = parse_args()
 
     if opts.operation == 'patch':
-        if path.getsize(opts.patch) > MIN_PATCH:
+        if path.getsize(opts.patch) < MIN_PATCH:
             raise IOError("Patch is too small to be valid")
-        if path.getsize(opts.unpatched) < MAX_UNPATCHED:
+        if path.getsize(opts.unpatched) > MAX_UNPATCHED:
             raise IOError("IPS can only patch files under 2^24 bytes")
         copy = make_copy( opts.output, opts.unpatched )
         with open( copy, 'r+b') as fhdest:
@@ -68,7 +74,7 @@ def main(args=None):
         print("Applied " + str(numb) + " records from patch.")
 
     if opts.operation == 'diff':
-        if path.getsize(opts.unpatched) == path.getsize(opts.patch):
+        if path.getsize(opts.unpatched) != path.getsize(opts.patch):
             raise IOError("The two files are of differing size")
         patchfile = name_patch( opts.output, opts.unpatched )
         with open( opts.unpatched, 'rb' ) as fhsrc:
