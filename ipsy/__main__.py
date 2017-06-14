@@ -38,6 +38,7 @@ def name_patch( patchname, unpatched ):
         patchname = "patch_" + fname + ".ips"
     else:
         patchname = "patch_" + fname.split('.')[:-1] + ".ips"
+    return patchname
 
 def parse_args():
     parser = ArgumentParser(description=

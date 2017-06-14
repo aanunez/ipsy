@@ -7,7 +7,8 @@ from warnings import warn
 from os import SEEK_CUR
 
 # TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
-# TODO add IPS merge feature
+# TODO Improve IPS merge
+# TODO Add IPS merge option to main
 
 RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -102,6 +103,20 @@ def read_ips( fhpatch, EOFcontinue=False ):
     if fhpatch.read(1) != b'':
         warn("Data after EOF in IPS file. Truncating.")
     return records
+
+def ips_merge( fhdst, *fhpatches ):
+    '''
+    Turns several IPS patches into one larger patch.
+    Does not try to remove duplicate data written in the patches.
+
+    :param fhdst: File Handler for resulting IPS file
+    :param fhpatches: list of File Handlers for IPS files to merge
+    '''
+    record_collection = []
+    for fh in fhpatches:
+        records = read_ips( fh, EOFcontinue=True )
+        record_collection += records
+    write_ips( fhdst, record_collection )
 
 def rle_compress( records ):
     '''
