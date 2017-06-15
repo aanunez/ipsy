@@ -33,11 +33,11 @@ class ips_record( namedtuple('ips_record', 'offset size rle_size data') ):
 
 class IpsyError(Exception):
     '''
-    Logged by :func:`read_ips` when IPS corruption is found.
+    Logged by :func:`ips_read` when IPS corruption is found.
     '''
     pass
 
-def write_ips( fhpatch, records ):
+def ips_write( fhpatch, records ):
     '''
     Writes out a list of :class:`ips_record` to a file
 
@@ -51,7 +51,7 @@ def write_ips( fhpatch, records ):
         fhpatch.write( r.data )
     fhpatch.write(b"EOF")
 
-def read_ips( fhpatch, EOFcontinue=False ):
+def ips_read( fhpatch, EOFcontinue=False ):
     '''
     Read in an IPS file to a list of :class:`ips_record`
 
@@ -75,7 +75,6 @@ def read_ips( fhpatch, EOFcontinue=False ):
                 fhpatch.seek(-MIN_RECORD, SEEK_CUR)
             else:
                 break
-        rle_size = 0
         size = fhpatch.read(RECORD_SIZE_SIZE)
         if (len(offset) != RECORD_OFFSET_SIZE) or (len(size) != RECORD_SIZE_SIZE):
             raise IpsyError(
@@ -83,9 +82,9 @@ def read_ips( fhpatch, EOFcontinue=False ):
         offset = int.from_bytes( offset, byteorder='big' )
         size = int.from_bytes( size, byteorder='big' )
         if size == 0:
-            rle_size = fhpatch.read(RECORD_SIZE_SIZE)
-            rle_size = int.from_bytes( rle_size, byteorder='big' )
-            if rle_size == 0:
+            size = fhpatch.read(RECORD_SIZE_SIZE)
+            size = int.from_bytes( size, byteorder='big' )
+            if size == 0:
                 warn("IPS file has record with both 0 size and 0 RLE size." + \
                     "Continuing to next record.")
                 continue
@@ -99,7 +98,7 @@ def read_ips( fhpatch, EOFcontinue=False ):
             if len(data) != size:
                 raise IpsyError(
                     "IPS file unexpectedly ended")
-        records.append( ips_record(offset, size, rle_size, data) )
+        records.append( ips_record(offset, size, 0, data) )
     if fhpatch.read(1) != b'':
         warn("Data after EOF in IPS file. Truncating.")
     return records
@@ -114,9 +113,9 @@ def ips_merge( fhdst, *fhpatches ):
     '''
     record_collection = []
     for fh in fhpatches:
-        records = read_ips( fh, EOFcontinue=True )
+        records = ips_read( fh, EOFcontinue=True )
         record_collection += records
-    write_ips( fhdst, record_collection )
+    ips_write( fhdst, record_collection )
 
 def rle_compress( records ):
     '''
@@ -195,7 +194,7 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
     elif rle:
         records = rle_compress( records )
     if fhpatch:
-        write_ips( fhpatch, records )
+        ips_write( fhpatch, records )
     return ips
 
 def patch_from_records( fhdest, records ):
@@ -222,6 +221,6 @@ def patch( fhdest, fhpatch, EOFcontinue=False ):
                         is found (last 3 bytes of file)
     :returns: Number of records applied by the patch
     '''
-    records = read_ips( fhpatch, EOFcontinue )
+    records = ips_read( fhpatch, EOFcontinue )
     return patch_from_records( fhdest, records )
 

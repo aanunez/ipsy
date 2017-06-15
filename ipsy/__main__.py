@@ -4,13 +4,7 @@ from argparse import ArgumentParser, ArgumentTypeError
 from shutil import copyfile
 from sys import argv
 from os import path, sep
-try:
-    from .ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff
-except SystemError: # Used if running without installing
-    import sys
-    import os
-    sys.path.append(os.path.abspath("ipsy"))
-    from ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff
+from ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff
 
 def operation_type( string ):
     if string.lower() in ['patch','diff']:
