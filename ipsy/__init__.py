@@ -1,3 +1,5 @@
 #!/usr/bin/env python3
 
-from ipsy.ipsy import *
+__all__ = ['ipsy']
+
+from . import ipsy
