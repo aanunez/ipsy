@@ -8,7 +8,6 @@ from os import SEEK_CUR
 
 # TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
 # TODO Improve IPS merge
-# TODO Add IPS merge option to main
 
 RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
