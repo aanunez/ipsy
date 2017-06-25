@@ -92,9 +92,17 @@ def main():
         for ips_file in opts.patch:
             if path.getsize(ips_file) < MIN_PATCH:
                 raise IOError("Patch " + ips_file + "is too small to be valid")
-        fhdst = name_patch( opts.output, opts.patch[0] )
-        ips_merge( fhdst, *opts.patch )
-        print("Merged " + str(len(opts.patch)) + " IPS files into one.")
+        patchfile = name_patch( opts.output, opts.patch[0] )
+        fhips = []
+        try:
+            for ips_file in opts.patch:
+                fhips.append( open(ips_file, 'r') )
+            with open( patchfile, 'wb' ) as fhdst:
+                ips_merge( fhdst, *fhips )
+        finally:
+            for ips_file in fhips:
+                ips_file.close()
+        print("Merged " + str( len(opts.patch) ) + " IPS files into one.")
 
 if __name__ == "__main__":
     main()

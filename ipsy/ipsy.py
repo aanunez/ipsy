@@ -7,7 +7,7 @@ from warnings import warn
 from os import SEEK_CUR
 
 # TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
-# TODO Improve IPS merge
+# TODO Improve IPS merge (check for dups)
 
 RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
