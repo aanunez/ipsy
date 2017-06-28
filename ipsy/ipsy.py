@@ -7,7 +7,7 @@ from warnings import warn
 from os import SEEK_CUR
 
 # TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
-# TODO Improve IPS merge (check for dups)
+# TODO Improve ips_merge_from_records
 
 RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -19,7 +19,7 @@ MAX_UNPATCHED = 2**24 # 16 MiB
 MIN_COMPRESS = 4 # Compressing a size 4 record only saves 1 byte
 MAX_RECORD_SIZE = 2**16-1 # Max value held in 2 bytes
 
-class ips_record( namedtuple('ips_record', 'offset size rle_size data') ):
+class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
     '''
     Data container for one record of an IPS file.
 
@@ -38,10 +38,10 @@ class IpsyError(Exception):
 
 def ips_write( fhpatch, records ):
     '''
-    Writes out a list of :class:`ips_record` to a file
+    Writes out a list of :class:`IpsRecord` to a file
 
     :param fhpatch: File handler of the new patch file
-    :param records: List of :class:`ips_record`
+    :param records: List of :class:`IpsRecord`
     '''
     fhpatch.write(b"PATCH")
     for r in records:
@@ -52,12 +52,12 @@ def ips_write( fhpatch, records ):
 
 def ips_read( fhpatch, EOFcontinue=False ):
     '''
-    Read in an IPS file to a list of :class:`ips_record`
+    Read in an IPS file to a list of :class:`IpsRecord`
 
     :param fhpatch: File handler for IPS patch
     :param EOFcontinue: Continue processing until the real EOF
                         is found (last 3 bytes of file)
-    :returns: List of :class:`ips_record`
+    :returns: List of :class:`IpsRecord`
 
     If the file contains any RLE compressed records,
     they are automatically inflated.
@@ -97,7 +97,7 @@ def ips_read( fhpatch, EOFcontinue=False ):
             if len(data) != size:
                 raise IpsyError(
                     "IPS file unexpectedly ended")
-        records.append( ips_record(offset, size, 0, data) )
+        records.append( IpsRecord(offset, size, 0, data) )
     if fhpatch.read(1) != b'':
         warn("Data after EOF in IPS file. Truncating.")
     return records
@@ -105,23 +105,41 @@ def ips_read( fhpatch, EOFcontinue=False ):
 def ips_merge( fhdst, *fhpatches ):
     '''
     Turns several IPS patches into one larger patch.
-    Does not try to remove duplicate data written in the patches.
+    The order that the patches are applied in is preserved.
 
     :param fhdst: File Handler for resulting IPS file
     :param fhpatches: list of File Handlers for IPS files to merge
     '''
-    record_collection = []
+    records = []
     for fh in fhpatches:
-        records = ips_read( fh, EOFcontinue=True )
-        record_collection += records
-    ips_write( fhdst, record_collection )
+	    records += ips_read( fh, EOFcontinue=True )
+    merged_records =  ips_cleanup( records )
+    ips_write( fhdst, merged_records )
+
+def ips_cleanup( ips_records ):
+    '''
+    Removes useless records and cobines records when possible.
+
+    :param ips_records: List of :class:`IpsRecord`
+    :returns: List of :class:`IpsRecord` with duplicates
+		      and useless records removed.
+    '''
+    final = []
+    for record in ips_records:
+	    if (record.size==0 and record.rle_size==0):
+		    continue
+	    # if (record in merged) # Can't use
+	    # Depends on the order patches are applied.
+	    # Check for more things here
+	    final += record
+    return final
 
 def rle_compress( records ):
     '''
     Attempt to RLE compress a collection of IPS records.
 
-    :param records: List of :class:`ips_record` to compress
-    :returns: RLE compressed list of :class:`ips_record`
+    :param records: List of :class:`IpsRecord` to compress
+    :returns: RLE compressed list of :class:`IpsRecord`
     '''
     rle = []
     for r in records:
@@ -135,14 +153,14 @@ def rle_compress( records ):
             if size >= MIN_COMPRESS:
                 if run:
                     o = r.offset+offset
-                    rle.append( ips_record(o-len(run), len(run), 0, run) )
-                rle.append( ips_record( o, 0, size, bytes([d])) )
+                    rle.append( IpsRecord(o-len(run), len(run), 0, run) )
+                rle.append( IpsRecord( o, 0, size, bytes([d])) )
                 run = b''
             else:
                 run = run + (bytes([d])*size)
             offset += size
         if run:
-            rle.append( ips_record(r.offset+offset-len(run), len(run), 0, run) )
+            rle.append( IpsRecord(r.offset+offset-len(run), len(run), 0, run) )
     return rle
 
 def eof_check( fhpatch ):
@@ -181,13 +199,13 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
                     offset, s = offset-1, s+1
                     fhsrc.seek(offset)
                     patch_bytes = fhsrc.read(s)
-                ips.append( ips_record(fhdst.tell()-s-1, s, 0, patch_bytes[:]) )
+                ips.append( IpsRecord(fhdst.tell()-s-1, s, 0, patch_bytes[:]) )
             patch_bytes = b''
         else:
             patch_bytes += dst_byte
     s = len(patch_bytes)
     if s != 0:
-        ips.append( ips_record(fhdst.tell()-s, s, 0, patch_bytes[:]) )
+        ips.append( IpsRecord(fhdst.tell()-s, s, 0, patch_bytes[:]) )
     if len(ips) == 0:
         warn("No differances found in files")
     elif rle:
@@ -198,7 +216,7 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
 
 def patch_from_records( fhdest, records ):
     '''
-    Apply an list of :class:`ips_record` a file. Destructive processes.
+    Apply an list of :class:`IpsRecord` a file. Destructive processes.
 
     :param fhdest: File handler to-be-patched
     :param fhpatch: File handler of the patch
