@@ -4,7 +4,7 @@ from argparse import ArgumentParser, ArgumentTypeError
 from shutil import copyfile
 from sys import argv
 from os import path, sep
-from ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff
+from .ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff
 
 def make_copy( filename, unpatched ):
     fname = unpatched.split(sep)[-1]
@@ -58,7 +58,7 @@ def parse_args():
         'List of IPS files.')
 
     parser.add_argument('output', default=None, nargs='?', help=
-        'Name for the new, patched, file.')
+        'Name for the new file')
 
     return parser.parse_args()
 

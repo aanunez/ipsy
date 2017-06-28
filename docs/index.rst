@@ -8,23 +8,25 @@ Ipsy is a tool for applying IPS (International/Internal Patch System) files. The
 Using ipsy
 ==========
 
-You should only install this using sudo if you have reviewed the source. You can run Ipsy without installing by passing it into python with the '-m' flag.
+You should only install this using sudo if you have reviewed the source. You can run Ipsy without installing by passing it into python with the '-m' flag from the root directory of the package.
 
 ::
 
     python -m ipsy [Ipsy Arguments]
 
-Install as you would any other python program.
+Install as you would any other python program. You shouldn't use `sudo` to install Ipsy unless you have reviewed the source code.
 ::
 
     pip3 install --user .
 
-If you have to files 'game.rom' and 'patch_for_game.ips' you can patch the game by...
+Ipsy has three major options: Patch, Diff, and Merge.
+
+If you have to files 'game.rom' and 'patch_for_game.ips' you can patch the game.
 ::
 
-    ipsy patch ./game.rom ./patch_for_game.ips
+    ipsy patch ./game.rom ./patch_for_game.ips -o new_rom
 
-This will generate a file named 'game_patched.rom'.
+This will generate a file named 'new_rom' or, if no output name is given, 'game_patched.rom'. The 'o' flag always supersedes any name that might be assigned by Ipsy regardless of the operation.
 
 If you want to generate a patch use...
 ::
@@ -39,25 +41,32 @@ When diffing you can also enable Run Length Encoding (RLE)
     ipsy diff ./game.rom ./edited_game.ips -rle
 
 RLE finds groups of edits where the same value is written is succession and replaces them with the value and the number of times that value should be written.
+
+Lastly, you can merge multiple IPS files using the merge option
 ::
 
-    usage: ipsy [-h] [-rle] [-eof] operation unpatched patch [output]
+    ipsy merge patchOne patchTwo patchThree patchFour
 
-    Apply an IPS patch or Diff two files to generate a patch.
+Results in a single file named after the first patch.
+
+Ipsy's help output:
+::
+
+    usage: ipsy [-h] {patch,diff,merge} ... [output]
+
+    Apply an IPS patch, Diff two files to generate a patch, or Merge multiple IPS
+    files.
 
     positional arguments:
-      operation   'Patch' or 'Diff'
-      unpatched   The Orignal File
-      patch       The IPS file (in Patch mode) or the already patched file (in
-                  Diff mode)
-      output      Optional name of resulting patch or patched file
+      {patch,diff,merge}  Options for Ipsy...
+        patch             Apply a patch to an unpatched file.
+        diff              Generate an IPS file by diffing the unpatched and
+                          patched versions.
+        merge             Combine several IPS files into one.
+      output              Name for the new, patched, file.
 
     optional arguments:
-      -h, --help  show this help message and exit
-      -rle        Attempt to compress the IPS patch when performing a diff.
-                  Ignored when patching.
-      -eof        Ignore 'EOF' markers unless they are actually found at the end
-                  of the file. Ignored when diffing.
+      -h, --help          show this help message and exit
 
 |
 

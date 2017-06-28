@@ -2,4 +2,4 @@
 
 __all__ = ['ipsy']
 
-from . import ipsy
+from .ipsy import *
