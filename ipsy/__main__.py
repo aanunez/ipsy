@@ -21,7 +21,7 @@ def name_patch( patchname, unpatched ):
 
 def parse_args():
     parser = ArgumentParser(description=
-        "Apply an IPS patch, Diff two files to generate a patch, or Merge multiple IPS files.")
+        'Apply an IPS patch, Diff two files to generate a patch, or Merge multiple IPS files.')
     subparsers = parser.add_subparsers(dest='option', help=
         'Options for Ipsy...')
 
@@ -32,7 +32,7 @@ def parse_args():
     parser_patch.add_argument('patch', help=
         'IPS file to apply.')
     parser_patch.add_argument('-eof', action='store_true', help=
-        "Ignore 'EOF' markers unless they are actually found at the end of the file.")
+        'Ignore 'EOF' markers unless they are actually found at the end of the file.')
 
     parser_diff = subparsers.add_parser('diff', help=
         'Generate an IPS file by diffing the unpatched and patched versions.')

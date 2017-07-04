@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 
 from collections import namedtuple, deque
+from os import SEEK_CUR, remove
 from itertools import groupby
 from functools import partial
+from shutil import copyfile
 from warnings import warn
-from os import SEEK_CUR
+from uuid import uuid4
 
 # TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
-# TODO Improve ips_merge_from_records
 
 RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -28,7 +29,13 @@ class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
     :param rle_size: size in the next 2 bytes if previous was 0, stored as int
     :param data: bytes object of data with length size or rle_size
     '''
-    pass
+    def last_byte(self):
+        '''
+        Calculate the last byte written to when this record is applied to the ROM.
+
+        :returns: offset of the last byte written to.
+        '''
+        return self.offset + self.size + self.rle_size
 
 class IpsyError(Exception):
     '''
@@ -119,20 +126,26 @@ def ips_merge( fhdst, *fhpatches ):
 def ips_cleanup( ips_records ):
     '''
     Removes useless records and cobines records when possible.
+    This function creates and deletes two temp files in the
+    calling directory.
 
     :param ips_records: List of :class:`IpsRecord`
-    :returns: List of :class:`IpsRecord` with duplicates
-		      and useless records removed.
+    :returns: List of :class:`IpsRecord`, simplified where
+              possible.
     '''
-    final = []
-    for record in ips_records:
-	    if (record.size==0 and record.rle_size==0):
-		    continue
-	    # if (record in merged) # Can't use
-	    # Depends on the order patches are applied.
-	    # Check for more things here
-	    final += record
-    return final
+    rom_size = max([record.last_byte() for record in ips_records])
+    src_name, dst_name = str(uuid4()), str(uuid4())
+    with open(src_name, 'wb+') as fh:
+        fh.write(b'\00' * rom_size)
+    copyfile(src_name, dst_name)
+    with open(dst_name, 'wb') as fh:
+        patch_from_records( fh, ips_records )
+    with open(src_name, 'rb') as fhsrc:
+        with open(dst_name, 'rb') as fhdst:
+            clean_ips = diff( file_src, file_dst, fhpatch=None, rle=True )
+    remove(src_name)
+    remove(dst_name)
+    return clean_ips
 
 def rle_compress( records ):
     '''
