@@ -3,29 +3,20 @@
 from argparse import ArgumentParser, ArgumentTypeError
 from shutil import copyfile
 from sys import argv
-from os import path, sep
+from os import path
 from .ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff
 
 def make_copy( filename, unpatched ):
-    fname = unpatched.split(sep)[-1]
-    dot = fname.rfind('.')
-    if filename:
-        pass
-    elif dot == -1:
-        filename = unpatched + "_patched"
-    else:
-        filename = fname[:dot] + "_patched" + fname[dot:]
+    if not filename:
+        tmp = os.path.splitext( path.basename(unpatched) )
+        filename = tmp[0] + "_patched" + tmp[1]
     copyfile(unpatched, filename)
     return filename
 
 def name_patch( patchname, unpatched ):
-    if patchname:
-        return patchname
-    fname = unpatched.split(sep)[-1]
-    if fname.rfind('.') == -1:
-        patchname = "patch_" + fname + ".ips"
-    else:
-        patchname = "patch_" + fname.split('.')[:-1] + ".ips"
+    if not patchname:
+        tmp = os.path.splitext( path.basename(unpatched) )
+        patchname = "patch_" + tmp[0] + ".ips"
     return patchname
 
 def parse_args():
