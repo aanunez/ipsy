@@ -164,13 +164,13 @@ def rle_compress( records ):
         for d,g in groupby(r.data):
             size = len(list(g))
             if size >= MIN_COMPRESS:
+                totaloff = r.offset+offset
                 if run:
-                    o = r.offset+offset
-                    rle.append( IpsRecord(o-len(run), len(run), 0, run) )
-                rle.append( IpsRecord( o, 0, size, bytes([d])) )
-                run = b''
+                    rle.append( IpsRecord(totaloff-len(run), len(run), 0, run) )
+                    run = b''
+                rle.append( IpsRecord( totaloff, 0, size, bytes([d])) )
             else:
-                run = run + (bytes([d])*size)
+                run += (bytes([d])*size)
             offset += size
         if run:
             rle.append( IpsRecord(r.offset+offset-len(run), len(run), 0, run) )
