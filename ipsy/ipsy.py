@@ -14,10 +14,10 @@ RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
 RECORD_SIZE_SIZE = 2
 RECORD_RLE_DATA_SIZE = 1
-MIN_PATCH = 14 # in bytes
-MIN_RECORD = 6 # Min size of a record
-MAX_UNPATCHED = 2**24 # 16 MiB
-MIN_COMPRESS = 4 # Compressing a size 4 record only saves 1 byte
+MIN_PATCH = 14            # Header + Footer + Min_Record
+MIN_RECORD = 6            # Minimum viable size of a record
+MIN_COMPRESS = 4          # Compressing a size 4 record only saves 1 byte
+MAX_UNPATCHED = 2**24     # 16 MiB, largest value we can offset to
 MAX_RECORD_SIZE = 2**16-1 # Max value held in 2 bytes
 
 class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
@@ -27,15 +27,40 @@ class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
     :param offset: offset in first 3 bytes of the record, stored as int
     :param size: size in the next 2 bytes, stored as int
     :param rle_size: size in the next 2 bytes if previous was 0, stored as int
-    :param data: bytes object of data with length size or rle_size
+    :param data: bytes object of data with length 'size' or 'rle_size'
     '''
+
     def last_byte(self):
         '''
-        Calculate the last byte written to when this record is applied to the ROM.
+        Calculate the last byte written to when this record is applied to a file.
 
         :returns: offset of the last byte written to.
         '''
         return self.offset + self.size + self.rle_size
+
+    def inflate(self):
+        '''
+        Attempts to inflate the record if it is currently RLE compressed.
+
+        :returns: self or inflated :class:`IpsRecord`
+        '''
+        if not self.rle_size:
+            return self
+        return IpsRecord(self.offset, self.rle_size, 0, self.data*self.rle_size)
+
+    def compress(self):
+        '''
+        Attempts to RLE compress the record into a single, smaller, record.
+
+        :returns: self or compressed :class:`IpsRecord`
+        '''
+        if not self.size:
+            return self
+        if len(self.data) > MIN_COMPRESS and \
+           len([len(list(g)) for _,g in groupby(self.data)]) == 1:
+            return IpsRecord(self.offset, 0, len(self.data), self.data[0])
+        return self
+
 
 class IpsyError(Exception):
     '''
@@ -60,14 +85,13 @@ def ips_write( fhpatch, records ):
 def ips_read( fhpatch, EOFcontinue=False ):
     '''
     Read in an IPS file to a list of :class:`IpsRecord`
+    If the file contains any RLE compressed records,
+    they are automatically inflated.
 
     :param fhpatch: File handler for IPS patch
     :param EOFcontinue: Continue processing until the real EOF
                         is found (last 3 bytes of file)
     :returns: List of :class:`IpsRecord`
-
-    If the file contains any RLE compressed records,
-    they are automatically inflated.
     '''
     records = []
     if fhpatch.read(RECORD_HEADER_SIZE) != b"PATCH":
@@ -136,7 +160,7 @@ def ips_cleanup( ips_records ):
     rom_size = max([record.last_byte() for record in ips_records])
     src_name, dst_name = str(uuid4()), str(uuid4())
     with open(src_name, 'wb+') as fh:
-        fh.write(b'\00' * rom_size)
+        fh.write(b'\00' * rom_size) # TODO BIG PROBLEM
     copyfile(src_name, dst_name)
     with open(dst_name, 'wb') as fh:
         patch_from_records( fh, ips_records )
@@ -156,8 +180,10 @@ def rle_compress( records ):
     '''
     rle = []
     for r in records:
-        if (r.size < MIN_COMPRESS) or \
-        not any([len(list(g)) >= MIN_COMPRESS for _,g in groupby(r.data)]):
+        r = r.compress()
+        if r.rle_size or \
+          (r.size < MIN_COMPRESS) or \
+          (not any([len(list(g)) >= MIN_COMPRESS for _,g in groupby(r.data)])):
             rle.append( r )
             continue
         offset, run = 0, b''
@@ -193,13 +219,12 @@ def eof_check( fhpatch ):
 def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
     '''
     Diff two files, attempt RLE compression, and write the IPS patch to a file.
+    Assumes both files are the same size.
 
     :param fhsrc: File handler of orignal file
     :param fhdst: File handler of the patched file
     :param fhpatch: File handler for IPS file
     :param rle: True if RLE compression should be used
-
-    Assumes: Both files are the same size.
     '''
     ips, patch_bytes  = [], b''
     for src_byte in iter(partial(fhsrc.read, 1), b''):

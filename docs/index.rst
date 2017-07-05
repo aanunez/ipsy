@@ -12,7 +12,7 @@ You should only install this using sudo if you have reviewed the source. You can
 
 ::
 
-    python -m ipsy [Ipsy Arguments]
+    python3 -m ipsy [Ipsy Arguments]
 
 Install as you would any other python program. You shouldn't use `sudo` to install Ipsy unless you have reviewed the source code.
 ::

@@ -76,8 +76,9 @@ def main():
         with open( opts.unpatched, 'rb' ) as fhsrc:
             with open( opts.patch, 'rb' ) as fhdest:
                 with open ( patchfile, 'wb' ) as fhpatch:
-                    diff( fhsrc, fhdest )
-        print("Patch created, " + str(path.getsize(patchfile))+ " bytes")
+                    records = diff( fhsrc, fhdest )
+        print("Patch created, " + str(path.getsize(patchfile)) + " bytes, " + \
+            len(records) + " records.")
 
     if opts.option == 'merge':
         for ips_file in opts.patch:
