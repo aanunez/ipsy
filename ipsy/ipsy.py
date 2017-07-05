@@ -133,35 +133,42 @@ def ips_read( fhpatch, EOFcontinue=False ):
         warn("Data after EOF in IPS file. Truncating.")
     return records
 
-def ips_merge( fhdst, *fhpatches ):
+def ips_merge( fhpatch, *fhpatches, path_dst=None ):
     '''
     Turns several IPS patches into one larger patch.
     The order that the patches are applied in is preserved.
+    If the destination file is provided then further
+    simplifications can be made.
 
-    :param fhdst: File Handler for resulting IPS file
-    :param fhpatches: list of File Handlers for IPS files to merge
+    :param fhpatch: File Handler for resulting IPS file
+    :param fhpatches: list of File Handlers for IPS files to
+                      merge
+    :param path_dst: Path to file that these pathes are
+                     inteded to be used on.
     '''
     records = []
     for fh in fhpatches:
 	    records += ips_read( fh, EOFcontinue=True )
-    merged_records =  ips_cleanup( records )
-    ips_write( fhdst, merged_records )
+    if path_dst:
+        records =  ips_cleanup( records, path_dst )
+    ips_write( fhpatch, merged_records )
 
-def ips_cleanup( ips_records ):
+def ips_cleanup( ips_records, path_dst ):
     '''
     Removes useless records and cobines records when possible.
     This function creates and deletes two temp files in the
     calling directory.
 
     :param ips_records: List of :class:`IpsRecord`
+    :param path_dst: Path to file that these pathes are inteded
+                     to be used on.
     :returns: List of :class:`IpsRecord`, simplified where
               possible.
     '''
     rom_size = max([record.last_byte() for record in ips_records])
     src_name, dst_name = str(uuid4()), str(uuid4())
-    with open(src_name, 'wb+') as fh:
-        fh.write(b'\00' * rom_size) # TODO BIG PROBLEM
-    copyfile(src_name, dst_name)
+    copyfile(path_dst, src_name)
+    copyfile(path_dst, dst_name)
     with open(dst_name, 'wb') as fh:
         patch_from_records( fh, ips_records )
     with open(src_name, 'rb') as fhsrc:

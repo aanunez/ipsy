@@ -32,7 +32,7 @@ def parse_args():
     parser_patch.add_argument('patch', help=
         'IPS file to apply.')
     parser_patch.add_argument('-eof', action='store_true', help=
-        'Ignore 'EOF' markers unless they are actually found at the end of the file.')
+        'Ignore "EOF" markers unless they are actually found at the end of the file.')
 
     parser_diff = subparsers.add_parser('diff', help=
         'Generate an IPS file by diffing the unpatched and patched versions.')
@@ -45,16 +45,19 @@ def parse_args():
 
     parser_merge = subparsers.add_parser('merge', help=
         'Combine several IPS files into one.')
+    parser_merge.add_argument('-d','--destination', default=None, help=
+        'File that these patches are intended to be applied to. Providing this can, ' +\
+        'greatly reduce the size of the resulting merged patch.')
     parser_merge.add_argument('patch', nargs='*', help=
         'List of IPS files.')
 
-    parser.add_argument('output', default=None, nargs='?', help=
+    parser.add_argument('-o','--output', default=None, nargs='?', help=
         'Name for the new file')
 
     return parser.parse_args()
 
 def main():
-    if len(argv) == 1:
+    if len(argv) < 3:
         argv.append('-h')
     opts = parse_args()
 
@@ -90,7 +93,7 @@ def main():
             for ips_file in opts.patch:
                 fhips.append( open(ips_file, 'r') )
             with open( patchfile, 'wb' ) as fhdst:
-                ips_merge( fhdst, *fhips )
+                ips_merge( fhdst, *fhips, opts.destination )
         finally:
             for ips_file in fhips:
                 ips_file.close()
