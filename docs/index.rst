@@ -8,7 +8,7 @@ Ipsy is a tool for applying IPS (International/Internal Patch System) files. The
 Using ipsy
 ==========
 
-You should only install this using sudo if you have reviewed the source. You can run Ipsy without installing by passing it into python with the '-m' flag from the root directory of the package.
+You can run Ipsy without installing by passing it into python with the '-m' flag from the root directory of the package.
 
 ::
 

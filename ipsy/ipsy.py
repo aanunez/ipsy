@@ -8,7 +8,9 @@ from shutil import copyfile
 from warnings import warn
 from uuid import uuid4
 
+# For 0.2 release
 # TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
+# TODO EOF checking is only in data segment right now, check elsewhere too
 
 RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -60,6 +62,10 @@ class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
            len([len(list(g)) for _,g in groupby(self.data)]) == 1:
             return IpsRecord(self.offset, 0, len(self.data), self.data[0])
         return self
+
+    def flatten(self):
+        # TODO return b'' string to help check for EOF
+        pass
 
 
 class IpsyError(Exception):
