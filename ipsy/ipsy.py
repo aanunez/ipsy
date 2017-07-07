@@ -31,6 +31,9 @@ class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
     :param rle_size: size in the next 2 bytes if previous was 0, stored as int
     :param data: bytes object of data with length 'size' or 'rle_size'
     '''
+    #def __init__(self, offset, size, rle_size, data):
+    #    super().__init__()
+    #    print(self)
 
     def last_byte(self):
         '''
@@ -60,7 +63,7 @@ class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
             return self
         if len(self.data) > MIN_COMPRESS and \
            len([len(list(g)) for _,g in groupby(self.data)]) == 1:
-            return IpsRecord(self.offset, 0, len(self.data), self.data[0])
+            return IpsRecord(self.offset, 0, len(self.data), self.data[:1])
         return self
 
     def flatten(self):
@@ -84,7 +87,12 @@ def ips_write( fhpatch, records ):
     fhpatch.write(b"PATCH")
     for r in records:
         fhpatch.write( (r.offset).to_bytes(RECORD_OFFSET_SIZE, byteorder='big') )
-        fhpatch.write( (r.size).to_bytes(RECORD_SIZE_SIZE, byteorder='big') )
+        if r.size:
+            fhpatch.write( (r.size).to_bytes(RECORD_SIZE_SIZE, byteorder='big') )
+        else:
+            fhpatch.write( b'\00\00' )
+        if r.rle_size:
+            fhpatch.write( (r.rle_size).to_bytes(RECORD_SIZE_SIZE, byteorder='big') )
         fhpatch.write( r.data )
     fhpatch.write(b"EOF")
 
@@ -239,7 +247,7 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
     :param fhpatch: File handler for IPS file
     :param rle: True if RLE compression should be used
     '''
-    ips, patch_bytes  = [], b''
+    records, patch_bytes  = [], b''
     for src_byte in iter(partial(fhsrc.read, 1), b''):
         dst_byte = fhdst.read(1)
         s = len(patch_bytes)
@@ -250,20 +258,20 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
                     offset, s = offset-1, s+1
                     fhsrc.seek(offset)
                     patch_bytes = fhsrc.read(s)
-                ips.append( IpsRecord(fhdst.tell()-s-1, s, 0, patch_bytes[:]) )
+                records.append( IpsRecord(fhdst.tell()-s-1, s, 0, patch_bytes[:]) )
             patch_bytes = b''
         else:
             patch_bytes += dst_byte
     s = len(patch_bytes)
     if s != 0:
-        ips.append( IpsRecord(fhdst.tell()-s, s, 0, patch_bytes[:]) )
-    if len(ips) == 0:
+        records.append( IpsRecord(fhdst.tell()-s, s, 0, patch_bytes[:]) )
+    if len(records) == 0:
         warn("No differances found in files")
     elif rle:
         records = rle_compress( records )
     if fhpatch:
         ips_write( fhpatch, records )
-    return ips
+    return records
 
 def patch_from_records( fhdest, records ):
     '''

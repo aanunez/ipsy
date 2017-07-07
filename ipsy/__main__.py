@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser, ArgumentTypeError
+from os.path import splitext, getsize, basename
 from shutil import copyfile
 from sys import argv
-from os import path
 from .ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff
 
 def make_copy( filename, unpatched ):
     if not filename:
-        tmp = os.path.splitext( path.basename(unpatched) )
+        tmp = splitext( basename(unpatched) )
         filename = tmp[0] + "_patched" + tmp[1]
     copyfile(unpatched, filename)
     return filename
 
 def name_patch( patchname, unpatched ):
     if not patchname:
-        tmp = os.path.splitext( path.basename(unpatched) )
+        tmp = splitext( basename(unpatched) )
         patchname = "patch_" + tmp[0] + ".ips"
     return patchname
 
@@ -51,7 +51,7 @@ def parse_args():
     parser_merge.add_argument('patch', nargs='*', help=
         'List of IPS files.')
 
-    parser.add_argument('-o','--output', default=None, nargs='?', help=
+    parser.add_argument('-o','--output', default=None, help=
         'Name for the new file')
 
     return parser.parse_args()
@@ -62,9 +62,9 @@ def main():
     opts = parse_args()
 
     if opts.option == 'patch':
-        if path.getsize(opts.patch) < MIN_PATCH:
+        if getsize(opts.patch) < MIN_PATCH:
             raise IOError("Patch is too small to be valid")
-        if path.getsize(opts.unpatched) > MAX_UNPATCHED:
+        if getsize(opts.unpatched) > MAX_UNPATCHED:
             raise IOError("IPS can only patch files under 2^24 bytes")
         copy = make_copy( opts.output, opts.unpatched )
         with open( copy, 'r+b') as fhdest:
@@ -73,19 +73,19 @@ def main():
         print("Applied " + str(numb) + " records from patch.")
 
     if opts.option == 'diff':
-        if path.getsize(opts.unpatched) != path.getsize(opts.patch):
+        if getsize(opts.unpatched) != getsize(opts.patched):
             raise IOError("The two files are of differing size")
         patchfile = name_patch( opts.output, opts.unpatched )
         with open( opts.unpatched, 'rb' ) as fhsrc:
-            with open( opts.patch, 'rb' ) as fhdest:
+            with open( opts.patched, 'rb' ) as fhdest:
                 with open ( patchfile, 'wb' ) as fhpatch:
-                    records = diff( fhsrc, fhdest )
-        print("Patch created, " + str(path.getsize(patchfile)) + " bytes, " + \
-            len(records) + " records.")
+                    records = diff( fhsrc, fhdest, fhpatch, opts.rle )
+        print("Patch created, " + str(getsize(patchfile)) + " bytes, " + \
+            str(len(records)) + " records.")
 
     if opts.option == 'merge':
         for ips_file in opts.patch:
-            if path.getsize(ips_file) < MIN_PATCH:
+            if getsize(ips_file) < MIN_PATCH:
                 raise IOError("Patch " + ips_file + "is too small to be valid")
         patchfile = name_patch( opts.output, opts.patch[0] )
         fhips = []
