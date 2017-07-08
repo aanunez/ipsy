@@ -4,7 +4,7 @@ from argparse import ArgumentParser, ArgumentTypeError
 from os.path import splitext, getsize, basename
 from shutil import copyfile
 from sys import argv
-from .ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff
+from .ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff, merge
 
 def make_copy( filename, unpatched ):
     if not filename:
@@ -91,9 +91,9 @@ def main():
         fhips = []
         try:
             for ips_file in opts.patch:
-                fhips.append( open(ips_file, 'r') )
+                fhips.append( open(ips_file, 'rb') )
             with open( patchfile, 'wb' ) as fhdst:
-                ips_merge( fhdst, *fhips, opts.destination )
+                merge( fhdst, *fhips, opts.destination )
         finally:
             for ips_file in fhips:
                 ips_file.close()

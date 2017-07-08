@@ -9,8 +9,10 @@ from warnings import warn
 from uuid import uuid4
 
 # For 0.2 release
-# TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
 # TODO EOF checking is only in data segment right now, check elsewhere too
+
+# For 0.3 release
+# TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
 
 RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -45,7 +47,7 @@ class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
 
     def inflate(self):
         '''
-        Attempts to inflate the record if it is currently RLE compressed.
+        Inflate the record if it is currently RLE compressed.
 
         :returns: self or inflated :class:`IpsRecord`
         '''
@@ -55,7 +57,8 @@ class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
 
     def compress(self):
         '''
-        Attempts to RLE compress the record into a single, smaller, record.
+        Attempts to RLE compress the record into a single, smaller, record. Makes
+        No attempt to spilt the record up into multiple.
 
         :returns: self or compressed :class:`IpsRecord`
         '''
@@ -99,8 +102,6 @@ def ips_write( fhpatch, records ):
 def ips_read( fhpatch, EOFcontinue=False ):
     '''
     Read in an IPS file to a list of :class:`IpsRecord`
-    If the file contains any RLE compressed records,
-    they are automatically inflated.
 
     :param fhpatch: File handler for IPS patch
     :param EOFcontinue: Continue processing until the real EOF
@@ -136,18 +137,18 @@ def ips_read( fhpatch, EOFcontinue=False ):
             if data == b'':
                 raise IpsyError(
                     "IPS file unexpectedly ended")
-            data *= size
+            records.append( IpsRecord(offset, 0, size, data) )
         else:
             data = fhpatch.read(size)
             if len(data) != size:
                 raise IpsyError(
                     "IPS file unexpectedly ended")
-        records.append( IpsRecord(offset, size, 0, data) )
+            records.append( IpsRecord(offset, size, 0, data) )
     if fhpatch.read(1) != b'':
         warn("Data after EOF in IPS file. Truncating.")
     return records
 
-def ips_merge( fhpatch, *fhpatches, path_dst=None ):
+def merge( fhpatch, *fhpatches, path_dst=None ):
     '''
     Turns several IPS patches into one larger patch.
     The order that the patches are applied in is preserved.
@@ -160,14 +161,14 @@ def ips_merge( fhpatch, *fhpatches, path_dst=None ):
     :param path_dst: Path to file that these pathes are
                      inteded to be used on.
     '''
-    records = []
+    records, fhpatches = [], fhpatches[:-1]
     for fh in fhpatches:
 	    records += ips_read( fh, EOFcontinue=True )
     if path_dst:
-        records =  ips_cleanup( records, path_dst )
-    ips_write( fhpatch, merged_records )
+        records =  cleanup_records( records, path_dst )
+    ips_write( fhpatch, records )
 
-def ips_cleanup( ips_records, path_dst ):
+def cleanup_records( ips_records, path_dst ):
     '''
     Removes useless records and cobines records when possible.
     This function creates and deletes two temp files in the
@@ -284,7 +285,7 @@ def patch_from_records( fhdest, records ):
     '''
     for r in records:
         fhdest.seek(r.offset)
-        fhdest.write(r.data)
+        fhdest.write(r.inflate().data)
     return len(records)
 
 def patch( fhdest, fhpatch, EOFcontinue=False ):
