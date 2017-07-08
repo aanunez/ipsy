@@ -33,9 +33,6 @@ class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
     :param rle_size: size in the next 2 bytes if previous was 0, stored as int
     :param data: bytes object of data with length 'size' or 'rle_size'
     '''
-    #def __init__(self, offset, size, rle_size, data):
-    #    super().__init__()
-    #    print(self)
 
     def last_byte(self):
         '''
