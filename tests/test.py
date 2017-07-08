@@ -19,11 +19,12 @@ os.system('ipsy -o _output2 diff -rle diff_test/rom diff_test/patched_rom')
 if not filecmp.cmp('diff_test/output2', '_output2'):
     print('Issue on diff_test w/o rle')
 
-#filecmp.cmp('diff_test', 'out/diff_test')
-#os.system('ipsy diff rom1 patch1 -o diff_test')
+os.system('ipsy -o _output3 patch patch_test/rom patch_test/patch')
+if not filecmp.cmp('patch_test/output3', '_output3'):
+    print('Issue on patch_test')
 
-
-#filecmp.cmp('file1.txt', 'file1.txt')
-
+os.system('ipsy -o _output4 merge merge_test/patch1 merge_test/patch2')
+if not filecmp.cmp('merge_test/output4', '_output4'):
+    print('Issue on merge_test')
 
 print("Done!")
