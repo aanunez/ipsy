@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
 	name = 'ipsy',
-	version = '0.2',
+	version = '0.3',
 	description = 'Command line IPS (Internal Patch System) applier and differ',
 	author = 'Adam Nunez',
 	author_email = 'adam.a.nunez@gmail.com',

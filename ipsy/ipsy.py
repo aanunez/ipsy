@@ -8,11 +8,10 @@ from shutil import copyfile
 from warnings import warn
 from uuid import uuid4
 
-# For 0.2 release
-# TODO EOF checking is only in data segment right now, check elsewhere too
-
 # For 0.3 release
 # TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
+# TODO EOF checking is only in data segment right now, check elsewhere too,
+#      this will remove the check in main
 
 RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -67,9 +66,11 @@ class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
         return self
 
     def flatten(self):
-        # TODO return b'' string to help check for EOF
-        pass
-
+        base = (self.offset).to_bytes(RECORD_OFFSET_SIZE, byteorder='big') +\
+               (self.size).to_bytes(RECORD_SIZE_SIZE, byteorder='big')
+        if self.size:
+            return base + self.data
+        return base + (self.rle_size).to_bytes(RECORD_SIZE_SIZE, byteorder='big') + self.data
 
 class IpsyError(Exception):
     '''
@@ -86,14 +87,7 @@ def ips_write( fhpatch, records ):
     '''
     fhpatch.write(b"PATCH")
     for r in records:
-        fhpatch.write( (r.offset).to_bytes(RECORD_OFFSET_SIZE, byteorder='big') )
-        if r.size:
-            fhpatch.write( (r.size).to_bytes(RECORD_SIZE_SIZE, byteorder='big') )
-        else:
-            fhpatch.write( b'\00\00' )
-        if r.rle_size:
-            fhpatch.write( (r.rle_size).to_bytes(RECORD_SIZE_SIZE, byteorder='big') )
-        fhpatch.write( r.data )
+        fhpatch.write( r.flatten )
     fhpatch.write(b"EOF")
 
 def ips_read( fhpatch, EOFcontinue=False ):
