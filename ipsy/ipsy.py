@@ -161,7 +161,7 @@ def merge( fhpatch, *fhpatches, path_dst=None ):
 
 def cleanup_records( ips_records, path_dst ):
     '''
-    Removes useless records and cobines records when possible.
+    Removes useless records and combines records when possible.
     This function creates and deletes two temp files in the
     calling directory.
 
@@ -267,7 +267,7 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
 
 def patch_from_records( fhdest, records ):
     '''
-    Apply an list of :class:`IpsRecord` a file. Destructive processes.
+    Apply an list of :class:`IpsRecord` to a file. Destructive processes.
 
     :param fhdest: File handler to-be-patched
     :param fhpatch: File handler of the patch

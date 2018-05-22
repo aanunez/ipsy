@@ -14,4 +14,4 @@ You can install ipsy-0.2 via pypi `pip3 install ipsy`
 
 * EOF checking is only in data segment right now, check elsewhere too, remove the check in main when you do.
 
-* Add support for [UPS](http://fileformats.archiveteam.org/wiki/UPS_(binary_patch_format)) and [BPS](https://raw.githubusercontent.com/aanunez/ipsy/master/docs/bps_spec/bps_spec.html)
+* Add support for [UPS](http://fileformats.archiveteam.org/wiki/UPS_(binary_patch_format)) and [BPS](https://github.com/aanunez/ipsy/blob/master/docs/bps_spec/bps_spec.md). I'll need to wrap all the IPS stuff into an IPS class, then let ipsy have three differant classes just so I can have differant namespaces. That'll probably take a while to correctly refactor.
