@@ -291,4 +291,56 @@ def patch( fhdest, fhpatch, EOFcontinue=False ):
     '''
     records = ips_read( fhpatch, EOFcontinue )
     return patch_from_records( fhdest, records )
+    
+from zlib import crc32
+from shutil import copyfileobj
+from os import SEEK_END, SEEK_SET
+from tempfile import TemporaryFile
+
+class UPS:
+
+	RECORD_HEADER_SIZE = 4
+
+	class UpsRecord( namedtuple('UpsRecord', 'skip xor') ):
+		pass
+		
+	def crc_check( fhpatch, fhsrc, fhdst ):
+		crcSrc, crcDst = crc32(fhsrc), crc32(fhdst)
+		crcPat = crc32(fhpatch, ignorelast32=True)
+		fhpatch.seek(-12, SEEK_END)
+		fcrcSrc, fcrcDst, fcrcPat = list(iter(partial(fhpatch.read, 4), b''))
+		# Do compare
+		
+	def read( fhpatch ):
+		if fhpatch.read(RECORD_HEADER_SIZE) != b"UPS1":
+		raise IpsyError(
+			"UPS file missing header")
+		fhpatch.seek(-12, SEEK_END)
+		list(iter(partial(fhpatch.read, 4), b''))
+		## OTher stuff
+
+	def varaible_int_read( fhpatch ):
+		result, shift = 0, 0
+		for chunk in iter(partial(fhpatch.read, 1), b''):
+			chunk = int.from_bytes( chunk, byteorder='big' )
+			if chunk & 0x80:
+				result += (chunk & 0x7f) << shift
+				break
+			result += (chunk | 0x80) << shift
+			shift += 7
+		return result
+
+	def crc32( fh, ignorelast32=False ):
+		fh = strip_crc32(fh) if ignorelast32
+		out = 0
+		for chunk in iter(partial(fh.read, 16384), b''):
+			out = zlib.crc32(chunk, out)
+		return out & 0xFFFFFFFF
+
+	# This is a bad idea for big files
+	def strip_crc32( fh ):
+		copyfh = TemporaryFile()
+		copyfileobj(fh, copyfh, size)
+		copyfh.seek(-4, SEEK_END)
+		copyfh.truncate()
 
