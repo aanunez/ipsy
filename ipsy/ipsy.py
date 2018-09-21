@@ -2,7 +2,7 @@
 
 from collections import namedtuple
 from itertools import groupby
-from functools import partial, reduce
+from functools import partial, map
 from warnings import warn
 from os import SEEK_CUR
 from io import BytesIO
@@ -90,6 +90,7 @@ class IpsyError(Exception):
     Logged by :func:`ips_read` when IPS corruption is found.
     '''
     pass
+    
 
 def ips_write( fhpatch, records ):
     '''
@@ -102,6 +103,7 @@ def ips_write( fhpatch, records ):
     for r in records:
         fhpatch.write( r.flatten )
     fhpatch.write(b"EOF")
+
 
 def ips_read( fhpatch, EOFcontinue=False ):
     '''
@@ -165,10 +167,10 @@ def merge( fhpatch, *fhpatches, path_dst=None ):
     :param path_dst: Path to file that these patches are
                      intended to be used on.
     '''
-    reduce(lambda fh:ips_read( fh, EOFcontinue=True ), fhpatches[:-1], [])
+    records = [i for s in map(lambda fh:read( fh, EOFcontinue=True ), fhpatches[:-1]) for i in s]
     if path_dst:
         records = cleanup_records( records, path_dst )
-    ips_write( fhpatch, records )
+    write( fhpatch, records )
 
 def cleanup_records( ips_records, path_dst ):
     '''
@@ -195,7 +197,7 @@ def rle_compress( records ):
     :param records: List of :class:`IpsRecord` to compress
     :returns: RLE compressed list of :class:`IpsRecord`
     '''
-    return reduce(lambda r:r.compress(),records,[])
+    return map(lambda r:r.compress(),records)
 
 def eof_check( fhpatch ):
     '''
@@ -240,7 +242,7 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
     elif rle:
         records = rle_compress( records )
     if fhpatch:
-        ips_write( fhpatch, records )
+        write( fhpatch, records )
     return records
 
 def patch_from_records( fhdest, records ):
@@ -267,7 +269,7 @@ def patch( fhdest, fhpatch, EOFcontinue=False ):
                         is found (last 3 bytes of file)
     :returns: Number of records applied by the patch
     '''
-    return patch_from_records( fhdest, ips_read( fhpatch, EOFcontinue ) )
+    return patch_from_records( fhdest, read( fhpatch, EOFcontinue ) )
     
 #from zlib import crc32
 #from shutil import copyfileobj
