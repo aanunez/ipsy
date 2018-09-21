@@ -8,8 +8,6 @@ You can install ipsy-0.2 via pypi `pip3 install ipsy`
 
 ## To-do list
 
-* Make real tests
-
 * Improve diff or RLE algorithm. Example: src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1 . Currently the patch generated would be wastefull.
 
 * EOF checking is only in data segment right now, check elsewhere too, remove the check in main when you do.

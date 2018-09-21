@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser, ArgumentTypeError
+from argparse import ArgumentParser
 from os.path import splitext, getsize, basename
 from shutil import copyfile
 from sys import argv

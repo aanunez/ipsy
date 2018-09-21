@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 
-from collections import namedtuple, deque
-from os import SEEK_CUR, remove
+from collections import namedtuple
 from itertools import groupby
-from functools import partial
-from shutil import copyfile
+from functools import partial, reduce
 from warnings import warn
-from uuid import uuid4
+from os import SEEK_CUR
+from io import BytesIO
 
 # For 0.3 release
 # TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
@@ -53,17 +52,31 @@ class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
 
     def compress(self):
         '''
-        Attempts to RLE compress the record into a single, smaller, record. Makes
-        No attempt to spilt the record up into multiple.
+        Attempts to RLE compress the record into a single, smaller, record. May
+        split the record to multiple.
 
-        :returns: self or compressed :class:`IpsRecord`
+        :returns: List of: self (no compression) or compressed :class:`IpsRecord`
         '''
-        if not self.size:
-            return self
-        if len(self.data) > MIN_COMPRESS and \
-           len([len(list(g)) for _,g in groupby(self.data)]) == 1:
-            return IpsRecord(self.offset, 0, len(self.data), self.data[:1])
-        return self
+        if not self.size or len(self.data) < MIN_COMPRESS or\
+           not any(i>=MIN_COMPRESS for i in [len(list(g)) for _,g in groupby(self.data)]):
+            return [self]
+        if len([len(list(g)) for _,g in groupby(self.data)]) == 1:
+            return [IpsRecord(self.offset, 0, len(self.data), self.data[0])]
+        offset, run, rle = 0, b'', []
+        for d,g in groupby(self.data):
+            size = len(list(g))
+            if size >= MIN_COMPRESS:
+                totaloff = self.offset+offset
+                if run:
+                    rle += IpsRecord(totaloff-len(run), len(run), 0, run)
+                    run = b''
+                rle += IpsRecord( totaloff, 0, size, bytes([d]))
+            else:
+                run += (bytes([d])*size)
+            offset += size
+        if run:
+            rle += IpsRecord(self.offset+offset-len(run), len(run), 0, run)
+        return rle
 
     def flatten(self):
         base = (self.offset).to_bytes(RECORD_OFFSET_SIZE, byteorder='big') +\
@@ -128,13 +141,13 @@ def ips_read( fhpatch, EOFcontinue=False ):
             if data == b'':
                 raise IpsyError(
                     "IPS file unexpectedly ended")
-            records.append( IpsRecord(offset, 0, size, data) )
+            records += IpsRecord(offset, 0, size, data)
         else:
             data = fhpatch.read(size)
             if len(data) != size:
                 raise IpsyError(
                     "IPS file unexpectedly ended")
-            records.append( IpsRecord(offset, size, 0, data) )
+            records += IpsRecord(offset, size, 0, data)
     if fhpatch.read(1) != b'':
         warn("Data after EOF in IPS file. Truncating.")
     return records
@@ -149,14 +162,12 @@ def merge( fhpatch, *fhpatches, path_dst=None ):
     :param fhpatch: File Handler for resulting IPS file
     :param fhpatches: list of File Handlers for IPS files to
                       merge
-    :param path_dst: Path to file that these pathes are
-                     inteded to be used on.
+    :param path_dst: Path to file that these patches are
+                     intended to be used on.
     '''
-    records, fhpatches = [], fhpatches[:-1]
-    for fh in fhpatches:
-        records += ips_read( fh, EOFcontinue=True )
+    reduce(lambda fh:ips_read( fh, EOFcontinue=True ), fhpatches[:-1], [])
     if path_dst:
-        records =  cleanup_records( records, path_dst )
+        records = cleanup_records( records, path_dst )
     ips_write( fhpatch, records )
 
 def cleanup_records( ips_records, path_dst ):
@@ -166,23 +177,16 @@ def cleanup_records( ips_records, path_dst ):
     calling directory.
 
     :param ips_records: List of :class:`IpsRecord`
-    :param path_dst: Path to file that these pathes are inteded
+    :param path_dst: Path to file that these patches are intended
                      to be used on.
     :returns: List of :class:`IpsRecord`, simplified where
               possible.
     '''
-    rom_size = max([record.last_byte() for record in ips_records])
-    src_name, dst_name = str(uuid4()), str(uuid4())
-    copyfile(path_dst, src_name)
-    copyfile(path_dst, dst_name)
-    with open(dst_name, 'wb') as fh:
-        patch_from_records( fh, ips_records )
-    with open(src_name, 'rb') as fhsrc:
-        with open(dst_name, 'rb') as fhdst:
-            clean_ips = diff( file_src, file_dst, fhpatch=None, rle=True )
-    remove(src_name)
-    remove(dst_name)
-    return clean_ips
+    with open(path_dst, 'r') as fh:
+        dstfh = BytesIO(fh.read())
+    srcfh = BytesIO(dstfh.read())
+    patch_from_records( dstfh, ips_records )
+    return diff( srcfh, dstfh, fhpatch=None, rle=True )
 
 def rle_compress( records ):
     '''
@@ -191,43 +195,17 @@ def rle_compress( records ):
     :param records: List of :class:`IpsRecord` to compress
     :returns: RLE compressed list of :class:`IpsRecord`
     '''
-    rle = []
-    for r in records:
-        r = r.compress()
-        if r.rle_size or \
-          (r.size < MIN_COMPRESS) or \
-          (not any([len(list(g)) >= MIN_COMPRESS for _,g in groupby(r.data)])):
-            rle.append( r )
-            continue
-        offset, run = 0, b''
-        for d,g in groupby(r.data):
-            size = len(list(g))
-            if size >= MIN_COMPRESS:
-                totaloff = r.offset+offset
-                if run:
-                    rle.append( IpsRecord(totaloff-len(run), len(run), 0, run) )
-                    run = b''
-                rle.append( IpsRecord( totaloff, 0, size, bytes([d])) )
-            else:
-                run += (bytes([d])*size)
-            offset += size
-        if run:
-            rle.append( IpsRecord(r.offset+offset-len(run), len(run), 0, run) )
-    return rle
+    return reduce(lambda r:r.compress(),records,[])
 
 def eof_check( fhpatch ):
     '''
-    Reviews an IPS patch to insure it has only one EOF marker.
+    Reviews an IPS patch to ensure it has only one EOF marker.
 
     :param fhpatch: File handler of IPS patch
-    :returns: True if exactly one marker, else False
+    :returns: True if exactly one marker exists at the end-of-file, else False
     '''
-    check, counter, i = deque(maxlen=3), 0, 0
-    for val in iter(partial(fhpatch.read, 1), b''):
-        check.append(val)
-        if b''.join(check) == b'EOF':
-            counter += 1
-    return (counter == 1)
+    patch = fh.read()
+    return (patch[-3:] == 'EOF' and patch[:-3].find('EOF') == -1)
 
 def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
     '''
@@ -250,15 +228,15 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
                     offset, s = offset-1, s+1
                     fhsrc.seek(offset)
                     patch_bytes = fhsrc.read(s)
-                records.append( IpsRecord(fhdst.tell()-s-1, s, 0, patch_bytes[:]) )
+                records += IpsRecord(fhdst.tell()-s-1, s, 0, patch_bytes[:])
             patch_bytes = b''
         else:
             patch_bytes += dst_byte
     s = len(patch_bytes)
     if s != 0:
-        records.append( IpsRecord(fhdst.tell()-s, s, 0, patch_bytes[:]) )
+        records += IpsRecord(fhdst.tell()-s, s, 0, patch_bytes[:])
     if len(records) == 0:
-        warn("No differances found in files")
+        warn("No differences found in files")
     elif rle:
         records = rle_compress( records )
     if fhpatch:
@@ -289,58 +267,56 @@ def patch( fhdest, fhpatch, EOFcontinue=False ):
                         is found (last 3 bytes of file)
     :returns: Number of records applied by the patch
     '''
-    records = ips_read( fhpatch, EOFcontinue )
-    return patch_from_records( fhdest, records )
+    return patch_from_records( fhdest, ips_read( fhpatch, EOFcontinue ) )
     
-from zlib import crc32
-from shutil import copyfileobj
-from os import SEEK_END, SEEK_SET
-from tempfile import TemporaryFile
-
-class UPS:
-
-    RECORD_HEADER_SIZE = 4
-
-    class UpsRecord( namedtuple('UpsRecord', 'skip xor') ):
-        pass
-        
-    def crc_check( fhpatch, fhsrc, fhdst ):
-        crcSrc, crcDst = crc32(fhsrc), crc32(fhdst)
-        crcPat = crc32(fhpatch, ignorelast32=True)
-        fhpatch.seek(-12, SEEK_END)
-        fcrcSrc, fcrcDst, fcrcPat = list(iter(partial(fhpatch.read, 4), b''))
-        # Do compare
-        
-    def read( fhpatch ):
-        if fhpatch.read(RECORD_HEADER_SIZE) != b"UPS1":
-            raise IpsyError(
-                "UPS file missing header")
-        fhpatch.seek(-12, SEEK_END)
-        list(iter(partial(fhpatch.read, 4), b''))
-        ## OTher stuff
-
-    def varaible_int_read( fhpatch ):
-        result, shift = 0, 0
-        for chunk in iter(partial(fhpatch.read, 1), b''):
-            chunk = int.from_bytes( chunk, byteorder='big' )
-            if chunk & 0x80:
-                result += (chunk & 0x7f) << shift
-                break
-            result += (chunk | 0x80) << shift
-            shift += 7
-        return result
-
-    def crc32( fh, ignorelast32=False ):
-        fh = strip_crc32(fh) if ignorelast32 else fh
-        out = 0
-        for chunk in iter(partial(fh.read, 16384), b''):
-            out = zlib.crc32(chunk, out)
-        return out & 0xFFFFFFFF
-
-    # This is a bad idea for big files
-    def strip_crc32( fh ):
-        copyfh = TemporaryFile()
-        copyfileobj(fh, copyfh, size)
-        copyfh.seek(-4, SEEK_END)
-        copyfh.truncate()
-
+#from zlib import crc32
+#from shutil import copyfileobj
+#from os import SEEK_END, SEEK_SET
+#from tempfile import TemporaryFile
+#
+#class UPS:
+#
+#    RECORD_HEADER_SIZE = 4
+#
+#    class UpsRecord( namedtuple('UpsRecord', 'skip xor') ):
+#        pass
+#        
+#    def crc_check( fhpatch, fhsrc, fhdst ):
+#        crcSrc, crcDst = crc32(fhsrc), crc32(fhdst)
+#        crcPat = crc32(fhpatch, ignorelast32=True)
+#        fhpatch.seek(-12, SEEK_END)
+#        fcrcSrc, fcrcDst, fcrcPat = list(iter(partial(fhpatch.read, 4), b''))
+#        # Do compare
+#        
+#    def read( fhpatch ):
+#        if fhpatch.read(RECORD_HEADER_SIZE) != b"UPS1":
+#            raise IpsyError(
+#                "UPS file missing header")
+#        fhpatch.seek(-12, SEEK_END)
+#        list(iter(partial(fhpatch.read, 4), b''))
+#        ## OTher stuff
+#
+#    def varaible_int_read( fhpatch ):
+#        result, shift = 0, 0
+#        for chunk in iter(partial(fhpatch.read, 1), b''):
+#            chunk = int.from_bytes( chunk, byteorder='big' )
+#            if chunk & 0x80:
+#                result += (chunk & 0x7f) << shift
+#                break
+#            result += (chunk | 0x80) << shift
+#            shift += 7
+#        return result
+#
+#    def crc32( fh, ignorelast32=False ):
+#        fh = strip_crc32(fh) if ignorelast32 else fh
+#        out = 0
+#        for chunk in iter(partial(fh.read, 16384), b''):
+#            out = zlib.crc32(chunk, out)
+#        return out & 0xFFFFFFFF
+#
+#    # This is a bad idea for big files
+#    def strip_crc32( fh ):
+#        copyfh = TemporaryFile()
+#        copyfileobj(fh, copyfh, size)
+#        copyfh.seek(-4, SEEK_END)
+#        copyfh.truncate()
