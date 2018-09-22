@@ -2,7 +2,7 @@
 
 from collections import namedtuple
 from itertools import groupby
-from functools import partial, map
+from functools import partial
 from warnings import warn
 from os import SEEK_CUR
 from io import BytesIO
@@ -68,14 +68,14 @@ class IpsRecord( namedtuple('IpsRecord', 'offset size rle_size data') ):
             if size >= MIN_COMPRESS:
                 totaloff = self.offset+offset
                 if run:
-                    rle += IpsRecord(totaloff-len(run), len(run), 0, run)
+                    rle.append(IpsRecord(totaloff-len(run), len(run), 0, run))
                     run = b''
-                rle += IpsRecord( totaloff, 0, size, bytes([d]))
+                rle.append(IpsRecord( totaloff, 0, size, bytes([d])))
             else:
                 run += (bytes([d])*size)
             offset += size
         if run:
-            rle += IpsRecord(self.offset+offset-len(run), len(run), 0, run)
+            rle.append(IpsRecord(self.offset+offset-len(run), len(run), 0, run))
         return rle
 
     def flatten(self):
@@ -91,8 +91,7 @@ class IpsyError(Exception):
     '''
     pass
     
-
-def ips_write( fhpatch, records ):
+def write( fhpatch, records ):
     '''
     Writes out a list of :class:`IpsRecord` to a file
 
@@ -101,11 +100,10 @@ def ips_write( fhpatch, records ):
     '''
     fhpatch.write(b"PATCH")
     for r in records:
-        fhpatch.write( r.flatten )
+        fhpatch.write( r.flatten() )
     fhpatch.write(b"EOF")
 
-
-def ips_read( fhpatch, EOFcontinue=False ):
+def read( fhpatch, EOFcontinue=False ):
     '''
     Read in an IPS file to a list of :class:`IpsRecord`
 
@@ -143,13 +141,13 @@ def ips_read( fhpatch, EOFcontinue=False ):
             if data == b'':
                 raise IpsyError(
                     "IPS file unexpectedly ended")
-            records += IpsRecord(offset, 0, size, data)
+            records.append(IpsRecord(offset, 0, size, data))
         else:
             data = fhpatch.read(size)
             if len(data) != size:
                 raise IpsyError(
                     "IPS file unexpectedly ended")
-            records += IpsRecord(offset, size, 0, data)
+            records.append(IpsRecord(offset, size, 0, data))
     if fhpatch.read(1) != b'':
         warn("Data after EOF in IPS file. Truncating.")
     return records
@@ -197,9 +195,9 @@ def rle_compress( records ):
     :param records: List of :class:`IpsRecord` to compress
     :returns: RLE compressed list of :class:`IpsRecord`
     '''
-    return map(lambda r:r.compress(),records)
+    return [i for s in map(lambda r:r.compress(),records) for i in s]
 
-def eof_check( fhpatch ):
+def eof_check( fh ):
     '''
     Reviews an IPS patch to ensure it has only one EOF marker.
 
@@ -207,7 +205,7 @@ def eof_check( fhpatch ):
     :returns: True if exactly one marker exists at the end-of-file, else False
     '''
     patch = fh.read()
-    return (patch[-3:] == 'EOF' and patch[:-3].find('EOF') == -1)
+    return ((patch[-3:] == 'EOF') and (patch[:-3].find('EOF') == -1))
 
 def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
     '''
@@ -218,6 +216,8 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
     :param fhdst: File handler of the patched file
     :param fhpatch: File handler for IPS file
     :param rle: True if RLE compression should be used
+    
+    :returns: List of :class:`IpsRecord` that were written to the file.
     '''
     records, patch_bytes  = [], b''
     for src_byte in iter(partial(fhsrc.read, 1), b''):
@@ -230,13 +230,13 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
                     offset, s = offset-1, s+1
                     fhsrc.seek(offset)
                     patch_bytes = fhsrc.read(s)
-                records += IpsRecord(fhdst.tell()-s-1, s, 0, patch_bytes[:])
+                records.append(IpsRecord(fhdst.tell()-s-1, s, 0, patch_bytes[:]))
             patch_bytes = b''
         else:
             patch_bytes += dst_byte
     s = len(patch_bytes)
     if s != 0:
-        records += IpsRecord(fhdst.tell()-s, s, 0, patch_bytes[:])
+        records.append(IpsRecord(fhdst.tell()-s, s, 0, patch_bytes[:]))
     if len(records) == 0:
         warn("No differences found in files")
     elif rle:

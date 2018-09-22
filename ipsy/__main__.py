@@ -6,9 +6,9 @@ from shutil import copyfile
 from sys import argv
 from .ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff, merge, eof_check
 
-EOF_BUG_STRING = '''After reviewing the new patch, it appears there are multiple 'EOF' markers.
-                    This patch will work with Ipsy, but may not with other patchers.
-                    The developer is working to fix this.'''
+EOF_BUG_STRING = 'After reviewing the new patch, it appears there are multiple "EOF" markers.'+\
+                 'This patch will work with Ipsy, but may not with other patchers.'+\
+                 'The developer is working to fix this.'
 
 def make_copy( filename, unpatched ):
     if not filename:
@@ -81,9 +81,9 @@ def main():
             raise IOError("The two files are of differing size")
         patchfile = name_patch( opts.output, opts.unpatched )
         with open( opts.unpatched, 'rb' ) as fhsrc:
-            with open( opts.patched, 'rb' ) as fhdest:
+            with open( opts.patched, 'rb' ) as fhdst:
                 with open ( patchfile, 'wb' ) as fhpatch:
-                    records = diff( fhsrc, fhdest, fhpatch, opts.rle )
+                    records = diff( fhsrc, fhdst, fhpatch, opts.rle )
                     if not eof_check( fhdst ):
                         print(EOF_BUG_STRING)
         print("Patch created, " + str(getsize(patchfile)) + " bytes, " + \
@@ -98,7 +98,7 @@ def main():
         try:
             for ips_file in opts.patch:
                 fhips.append( open(ips_file, 'rb') )
-            with open( patchfile, 'wb' ) as fhdst:
+            with open( patchfile, 'r+b' ) as fhdst:
                 merge( fhdst, *fhips, opts.destination )
                 if not eof_check( fhdst ):
                     print(EOF_BUG_STRING)
