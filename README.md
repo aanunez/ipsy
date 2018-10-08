@@ -10,8 +10,4 @@ You can install ipsy-0.2 via pypi `pip3 install ipsy`
 
 * Improve diff or RLE algorithm. Example: src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1 . Currently the patch generated would be wastefull.
 
-* EOF checking is only in data segment right now, check elsewhere too, remove the check in main when you do.
-
-* Wrap IPS related things in a class 
-
-* Add support for [UPS](http://fileformats.archiveteam.org/wiki/UPS_(binary_patch_format)) and [BPS](https://github.com/aanunez/ipsy/blob/master/docs/bps_spec/bps_spec.md). I'll need to wrap all the IPS stuff into an IPS class, then let ipsy have three differant classes just so I can have differant namespaces. That'll probably take a while to correctly refactor.
+* Add support for [UPS](http://fileformats.archiveteam.org/wiki/UPS_(binary_patch_format)) and [BPS](https://github.com/aanunez/ipsy/blob/master/docs/bps_spec/bps_spec.md). 

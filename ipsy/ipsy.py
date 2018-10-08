@@ -9,8 +9,6 @@ from io import BytesIO
 
 # For 0.3 release
 # TODO Improve diff or RLE algorithm - src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1
-# TODO EOF checking is only in data segment right now, check elsewhere too,
-#      this will remove the check in main
 
 RECORD_HEADER_SIZE = 5
 RECORD_OFFSET_SIZE = 3
@@ -173,8 +171,6 @@ def merge( fhpatch, *fhpatches, path_dst=None ):
 def cleanup_records( ips_records, path_dst ):
     '''
     Removes useless records and combines records when possible.
-    This function creates and deletes two temp files in the
-    calling directory.
 
     :param ips_records: List of :class:`IpsRecord`
     :param path_dst: Path to file that these patches are intended
@@ -196,16 +192,6 @@ def rle_compress( records ):
     :returns: RLE compressed list of :class:`IpsRecord`
     '''
     return [i for s in map(lambda r:r.compress(),records) for i in s]
-
-def eof_check( fh ):
-    '''
-    Reviews an IPS patch to ensure it has only one EOF marker.
-
-    :param fhpatch: File handler of IPS patch
-    :returns: True if exactly one marker exists at the end-of-file, else False
-    '''
-    patch = fh.read()
-    return ((patch[-3:] == 'EOF') and (patch[:-3].find('EOF') == -1))
 
 def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
     '''
@@ -239,7 +225,7 @@ def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
         records.append(IpsRecord(fhdst.tell()-s, s, 0, patch_bytes[:]))
     if len(records) == 0:
         warn("No differences found in files")
-    elif rle:
+    if rle:
         records = rle_compress( records )
     if fhpatch:
         write( fhpatch, records )

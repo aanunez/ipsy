@@ -4,11 +4,7 @@ from argparse import ArgumentParser
 from os.path import splitext, getsize, basename
 from shutil import copyfile
 from sys import argv
-from .ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff, merge, eof_check
-
-EOF_BUG_STRING = 'After reviewing the new patch, it appears there are multiple "EOF" markers.'+\
-                 'This patch will work with Ipsy, but may not with other patchers.'+\
-                 'The developer is working to fix this.'
+from .ipsy import MIN_PATCH, MAX_UNPATCHED, patch, diff, merge
 
 def make_copy( filename, unpatched ):
     if not filename:
@@ -71,40 +67,31 @@ def main():
         if getsize(opts.unpatched) > MAX_UNPATCHED:
             raise IOError("IPS can only patch files under 2^24 bytes")
         copy = make_copy( opts.output, opts.unpatched )
-        with open( copy, 'r+b') as fhdest:
-            with open( opts.patch, 'rb') as fhpatch:
-                numb = patch( fhdest, fhpatch )
+        with open( copy, 'r+b') as fhdest, open( opts.patch, 'rb') as fhpatch:
+            numb = patch( fhdest, fhpatch )
         print("Applied " + str(numb) + " records from patch.")
 
     if opts.option == 'diff':
         if getsize(opts.unpatched) != getsize(opts.patched):
             raise IOError("The two files are of differing size")
         patchfile = name_patch( opts.output, opts.unpatched )
-        with open( opts.unpatched, 'rb' ) as fhsrc:
-            with open( opts.patched, 'rb' ) as fhdst:
-                with open ( patchfile, 'wb' ) as fhpatch:
-                    records = diff( fhsrc, fhdst, fhpatch, opts.rle )
-                    if not eof_check( fhdst ):
-                        print(EOF_BUG_STRING)
+        with open(opts.unpatched,'rb') as fhsrc, open(opts.patched,'rb') as fhdst,\
+        open(patchfile,'wb') as fhpatch:
+            records = diff( fhsrc, fhdst, fhpatch, opts.rle )
         print("Patch created, " + str(getsize(patchfile)) + " bytes, " + \
             str(len(records)) + " records.")
 
     if opts.option == 'merge':
         for ips_file in opts.patch:
             if getsize(ips_file) < MIN_PATCH:
-                raise IOError("Patch " + ips_file + "is too small to be valid")
-        patchfile = name_patch( opts.output, opts.patch[0] )
-        fhips = []
+                raise IOError("Patch " + ips_file + " is too small to be valid")
+        patchfile = name_patch( opts.output, 'ipsy_merge' )
         try:
-            for ips_file in opts.patch:
-                fhips.append( open(ips_file, 'rb') )
+            fhips = [open(ips_file, 'rb') for ips_file in opts.patch]
             with open( patchfile, 'r+b' ) as fhdst:
                 merge( fhdst, *fhips, opts.destination )
-                if not eof_check( fhdst ):
-                    print(EOF_BUG_STRING)
         finally:
-            for ips_file in fhips:
-                ips_file.close()
+            _ = [ips_file.close() for ips_file in fhips]
         print("Merged " + str( len(opts.patch) ) + " IPS files into one.")
 
 if __name__ == "__main__":
