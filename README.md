@@ -8,6 +8,6 @@ You can install ipsy-0.2 via pypi `pip3 install ipsy`
 
 ## To-do list
 
-* Improve diff or RLE algorithm. Example: src = 1 2 1 2 1 2 -> dest = 1 1 1 1 1 1 . Currently the patch generated would be wastefull.
+* Lots more testing
 
 * Add support for [UPS](http://fileformats.archiveteam.org/wiki/UPS_(binary_patch_format)) and [BPS](https://github.com/aanunez/ipsy/blob/master/docs/bps_spec/bps_spec.md). 

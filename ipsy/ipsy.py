@@ -191,6 +191,8 @@ def rle_compress( records ):
     :param records: List of :class:`IpsRecord` to compress
     :returns: RLE compressed list of :class:`IpsRecord`
     '''
+    # TODO Improve this by compresing RLE records that sandwich a run of the RLE
+    # data. Might be more trouble than its worth.  
     return [i for s in map(lambda r:r.compress(),records) for i in s]
 
 def diff( fhsrc, fhdst, fhpatch=None, rle=False ):
